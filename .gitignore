@@ -1,0 +1,23 @@
+# Secrets — never commit. Copy .env.example → .env and fill in.
+.env
+infra/.env
+**/.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Backups (written by infra/scripts/backup.sh — data never lives in the repo)
+backups/
+
+# OS
+.DS_Store

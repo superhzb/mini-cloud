@@ -1,0 +1,137 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 0,
+  "title": "app · ref-showcase · product analytics",
+  "uid": "app-ref-showcase-analytics",
+  "tags": ["mini-cloud", "app", "ref-showcase", "analytics", "product"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-90d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "project",
+        "label": "Project",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "analytics" },
+        "query": "SELECT DISTINCT project FROM analytics_events ORDER BY 1",
+        "refresh": 2,
+        "sort": 1,
+        "current": { "text": "ref-showcase", "value": "ref-showcase" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "barchart",
+      "title": "Conversion funnel (identity resolved at query time)",
+      "description": "Persons reaching each ordered step. Anonymous ids are collapsed to their identified person via analytics_person_aliases before counting.",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "analytics" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "xField": "step", "orientation": "horizontal", "showValue": "always" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "datasource": { "type": "postgres", "uid": "analytics" },
+          "rawSql": "WITH resolved AS (\n  SELECT coalesce(a.distinct_id, e.distinct_id) AS person, e.event AS event, e.timestamp AS ts\n  FROM analytics_events e\n  LEFT JOIN analytics_person_aliases a ON a.previous_id = e.distinct_id\n  WHERE e.project = '$project' AND $__timeFilter(e.timestamp)\n),\nfirsts AS (\n  SELECT person,\n    min(ts) FILTER (WHERE event='document_uploaded')  AS s0,\n    min(ts) FILTER (WHERE event='document_processed') AS s1,\n    min(ts) FILTER (WHERE event='search_performed')   AS s2,\n    min(ts) FILTER (WHERE event='chat_started')        AS s3\n  FROM resolved GROUP BY person\n),\ncounts AS (\n  SELECT\n    count(*) FILTER (WHERE s0 IS NOT NULL) AS c0,\n    count(*) FILTER (WHERE s0 IS NOT NULL AND s1 IS NOT NULL AND s1>=s0) AS c1,\n    count(*) FILTER (WHERE s0 IS NOT NULL AND s1 IS NOT NULL AND s1>=s0 AND s2 IS NOT NULL AND s2>=s1) AS c2,\n    count(*) FILTER (WHERE s0 IS NOT NULL AND s1 IS NOT NULL AND s1>=s0 AND s2 IS NOT NULL AND s2>=s1 AND s3 IS NOT NULL AND s3>=s2) AS c3\n  FROM firsts\n)\nSELECT step, reached FROM (VALUES\n  (1,'1 · uploaded',  (SELECT c0 FROM counts)),\n  (2,'2 · processed', (SELECT c1 FROM counts)),\n  (3,'3 · searched',  (SELECT c2 FROM counts)),\n  (4,'4 · chatted',   (SELECT c3 FROM counts))\n) AS t(ord, step, reached) ORDER BY ord"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "End-to-end conversion",
+      "description": "Persons who completed all four steps in order, as a share of those who entered.",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "analytics" },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 10 }, { "color": "green", "value": 25 } ] } },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "datasource": { "type": "postgres", "uid": "analytics" },
+          "rawSql": "WITH resolved AS (\n  SELECT coalesce(a.distinct_id, e.distinct_id) AS person, e.event AS event, e.timestamp AS ts\n  FROM analytics_events e\n  LEFT JOIN analytics_person_aliases a ON a.previous_id = e.distinct_id\n  WHERE e.project = '$project' AND $__timeFilter(e.timestamp)\n),\nfirsts AS (\n  SELECT person,\n    min(ts) FILTER (WHERE event='document_uploaded') AS s0,\n    min(ts) FILTER (WHERE event='chat_started')       AS s3,\n    min(ts) FILTER (WHERE event='document_processed') AS s1,\n    min(ts) FILTER (WHERE event='search_performed')   AS s2\n  FROM resolved GROUP BY person\n),\ncounts AS (\n  SELECT\n    count(*) FILTER (WHERE s0 IS NOT NULL) AS c0,\n    count(*) FILTER (WHERE s0 IS NOT NULL AND s1 IS NOT NULL AND s1>=s0 AND s2 IS NOT NULL AND s2>=s1 AND s3 IS NOT NULL AND s3>=s2) AS c3\n  FROM firsts\n)\nSELECT CASE WHEN c0>0 THEN round(100.0*c3/c0, 1) ELSE 0 END AS conversion_pct FROM counts"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Daily active people (DAU)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "datasource": { "type": "postgres", "uid": "analytics" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 40 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "datasource": { "type": "postgres", "uid": "analytics" },
+          "rawSql": "SELECT date_trunc('day', timestamp) AS time, count(DISTINCT distinct_id) AS dau\nFROM analytics_events\nWHERE project = '$project' AND $__timeFilter(timestamp)\nGROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "barchart",
+      "title": "Top events",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "datasource": { "type": "postgres", "uid": "analytics" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "xField": "event", "orientation": "horizontal", "showValue": "always" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "datasource": { "type": "postgres", "uid": "analytics" },
+          "rawSql": "SELECT event, count(*) AS events\nFROM analytics_events\nWHERE project = '$project' AND $__timeFilter(timestamp)\nGROUP BY event ORDER BY events DESC LIMIT 15"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Weekly retention cohorts",
+      "description": "For each weekly cohort (anchored on first document_uploaded), distinct people active N weeks later. Identity resolved through aliases.",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 17 },
+      "datasource": { "type": "postgres", "uid": "analytics" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "datasource": { "type": "postgres", "uid": "analytics" },
+          "rawSql": "WITH resolved AS (\n  SELECT coalesce(a.distinct_id, e.distinct_id) AS person, e.event AS event, e.timestamp AS ts\n  FROM analytics_events e\n  LEFT JOIN analytics_person_aliases a ON a.previous_id = e.distinct_id\n  WHERE e.project = '$project'\n),\ncohorts AS (\n  SELECT person, date_trunc('week', min(ts) FILTER (WHERE event='document_uploaded')) AS cohort_week\n  FROM resolved GROUP BY person\n  HAVING min(ts) FILTER (WHERE event='document_uploaded') IS NOT NULL\n),\nactivity AS (\n  SELECT DISTINCT c.person, c.cohort_week,\n    (extract(epoch FROM (date_trunc('week', r.ts) - c.cohort_week)) / 604800)::int AS period\n  FROM cohorts c JOIN resolved r ON r.person = c.person WHERE r.ts >= c.cohort_week\n)\nSELECT to_char(cohort_week,'YYYY-MM-DD') AS cohort, period, count(DISTINCT person) AS active\nFROM activity WHERE period BETWEEN 0 AND 6\nGROUP BY cohort_week, period ORDER BY cohort_week, period"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Recent events",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 17 },
+      "datasource": { "type": "postgres", "uid": "analytics" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "datasource": { "type": "postgres", "uid": "analytics" },
+          "rawSql": "SELECT timestamp, event, distinct_id, session_id, correlation_id\nFROM analytics_events\nWHERE project = '$project' AND $__timeFilter(timestamp)\nORDER BY id DESC LIMIT 100"
+        }
+      ]
+    }
+  ]
+}

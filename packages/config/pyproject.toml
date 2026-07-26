@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mini-cloud-config"
+description = "Canonical env loading for mini-cloud apps — one name per concept, one place to load it."
+readme = "README.md"
+authors = [{ name = "Brett Huang" }]
+requires-python = ">=3.12"
+version = "0.1.0"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8.3.0", "pyright>=1.1.400", "ruff>=0.11.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mini_cloud"]
+
+[tool.ruff]
+extend = "../../tooling/ruff-base.toml"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+pythonpath = ["src"]
+testpaths = ["tests"]

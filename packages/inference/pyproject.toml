@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mini-cloud-inference"
+description = "Thin OpenAI-compatible inference client at the one canonical MINI_INFERENCE_URL."
+readme = "README.md"
+authors = [{ name = "Brett Huang" }]
+requires-python = ">=3.12"
+version = "0.1.0"
+dependencies = [
+  "mini-cloud-config>=0.1.0",
+  "openai>=1.40.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3.0", "pyright>=1.1.400", "ruff>=0.11.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mini_cloud"]
+
+[tool.ruff]
+extend = "../../tooling/ruff-base.toml"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+markers = ["live: hits a real inference gateway; run with --run-live and MINI_INFERENCE_URL"]
+pythonpath = ["src"]
+testpaths = ["tests"]

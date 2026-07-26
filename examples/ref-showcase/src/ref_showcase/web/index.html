@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Developer console for the mini-cloud ref-showcase service">
+    <title>ref-showcase console</title>
+    <link rel="stylesheet" href="console.css">
+    <script src="console.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">mini-cloud / ref-showcase</p>
+        <h1>Document intelligence console</h1>
+      </div>
+      <div class="topbar-controls">
+        <label for="theme">Theme</label>
+        <select id="theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+        <span class="correlation">Correlation <code id="correlation-id">—</code></span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="section-nav" aria-label="Console sections">
+        <a href="#overview">Overview</a>
+        <a href="#generate">Generate</a>
+        <a href="#examine">Examine</a>
+        <a href="#verify">Verify</a>
+        <a href="#analytics">Analytics</a>
+      </nav>
+
+      <main id="main">
+        <div id="notice" class="notice" role="status" aria-live="polite">
+          JavaScript adds live service state and API controls. The links and service guidance remain
+          usable without it.
+        </div>
+
+        <section id="overview">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">01 / system map</p>
+              <h2>Overview</h2>
+            </div>
+            <button id="refresh-overview" type="button">Refresh now</button>
+          </div>
+          <p>
+            Documents move through <code>storage</code> and relational <code>db</code>, then the
+            Postgres <code>queue</code> fans out embedding and summarization. Search and chat exercise
+            <code>inference</code>; requests, jobs, and outcomes surface through <code>obs</code> and
+            optional <code>analytics</code>.
+          </p>
+          <div class="status-grid" aria-label="Service readiness">
+            <article><span id="health-dot" class="dot unknown"></span><h3>Process</h3><p id="health-state">Checking liveness…</p></article>
+            <article><span id="db-dot" class="dot unknown"></span><h3>Database</h3><p id="db-state">Checking…</p></article>
+            <article><span id="storage-dot" class="dot unknown"></span><h3>Storage</h3><p id="storage-state">Checking…</p></article>
+            <article><span id="inference-dot" class="dot unknown"></span><h3>Inference</h3><p id="inference-state">Checking…</p></article>
+            <article><span id="analytics-dot" class="dot unknown"></span><h3>Analytics</h3><p id="analytics-state">Checking…</p></article>
+          </div>
+          <div class="split">
+            <article class="panel">
+              <h3>Queue activity</h3>
+              <div id="queue-stats">Requires the application database.</div>
+            </article>
+            <article class="panel">
+              <h3>References</h3>
+              <ul>
+                <li><a href="/docs">OpenAPI / Swagger</a></li>
+                <li><a href="/metrics">Prometheus metrics</a></li>
+                <li><a id="grafana-link" href="#">Local Grafana</a> — remote deployments may expose it elsewhere.</li>
+                <li><code>examples/ref-showcase/docs/service-tour.md</code> — deeper repository tour.</li>
+              </ul>
+            </article>
+          </div>
+          <p class="callout">
+            “Process alive” means FastAPI can answer. “Core services ready” means the configured
+            database and storage respond. An optional feature can be unavailable while the rest of
+            the console remains useful.
+          </p>
+        </section>
+
+        <section id="generate">
+          <div class="section-heading">
+            <div><p class="eyebrow">02 / write paths</p><h2>Generate</h2></div>
+          </div>
+          <div class="split">
+            <form id="document-form" class="panel">
+              <h3>Create a document</h3>
+              <label for="document-title">Title</label>
+              <input id="document-title" name="title" required value="Console field note">
+              <label for="document-text">Text</label>
+              <textarea id="document-text" name="text" required rows="6">A same-origin browser request stores this document, chunks it, and queues its pipeline work.</textarea>
+              <label for="document-tags">Tags <small>(comma-separated)</small></label>
+              <input id="document-tags" name="tags" value="console, demo">
+              <button type="submit">Create document</button>
+              <output id="document-result"></output>
+              <p class="hint">Ordinary creation is asynchronous. Run <code>make worker</code> to process pending jobs.</p>
+            </form>
+
+            <form id="upload-form" class="panel">
+              <h3>Upload an object</h3>
+              <label for="upload-file">File</label>
+              <input id="upload-file" name="file" type="file" required>
+              <label for="upload-prefix">Object prefix</label>
+              <input id="upload-prefix" name="prefix" value="uploads/">
+              <button type="submit">Upload file</button>
+              <output id="upload-result"></output>
+              <p class="hint">An upload stores one object only. It does not create a document or start ingestion.</p>
+            </form>
+          </div>
+          <form id="seed-form" class="panel seed-panel">
+            <div>
+              <h3>Bounded sample corpus</h3>
+              <p>
+                Uses deterministic offline inference and drains only ingest, embed, and summarize
+                work before returning. This developer-only mutation is not a production admin API.
+              </p>
+            </div>
+            <label for="seed-count">Documents</label>
+            <input id="seed-count" name="count" type="number" min="1" max="12" value="6">
+            <button type="submit">Seed samples</button>
+            <output id="seed-result"></output>
+          </form>
+        </section>
+
+        <section id="examine">
+          <div class="section-heading">
+            <div><p class="eyebrow">03 / read paths</p><h2>Examine</h2></div>
+          </div>
+          <article class="panel">
+            <div class="section-heading compact">
+              <h3>Documents</h3>
+              <form id="document-filter" class="inline-form">
+                <label for="filter-tag">Tag</label><input id="filter-tag" name="tag">
+                <label for="filter-status">Status</label><input id="filter-status" name="status">
+                <button type="submit">Apply</button>
+              </form>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Title</th><th>Status</th><th>Tags</th><th>Chunks</th><th></th></tr></thead>
+                <tbody id="documents-body"><tr><td colspan="5">Load documents to begin.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <button id="documents-prev" type="button">Previous</button>
+              <span id="documents-page">—</span>
+              <button id="documents-next" type="button">Next</button>
+            </div>
+          </article>
+
+          <dialog id="document-dialog">
+            <div class="dialog-heading">
+              <h3 id="detail-title">Document detail</h3>
+              <button id="detail-close" type="button" aria-label="Close document detail">Close</button>
+            </div>
+            <div id="document-detail"></div>
+          </dialog>
+
+          <article class="panel">
+            <div class="section-heading compact">
+              <h3>Storage browser</h3>
+              <form id="storage-filter" class="inline-form">
+                <label for="storage-prefix">Prefix</label><input id="storage-prefix" value="">
+                <label for="storage-limit">Limit</label><input id="storage-limit" type="number" min="1" max="1000" value="50">
+                <button type="submit">List</button>
+              </form>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Key</th><th>Bytes</th><th>Modified</th><th>Actions</th></tr></thead>
+                <tbody id="objects-body"><tr><td colspan="4">List objects to begin.</td></tr></tbody>
+              </table>
+            </div>
+            <form id="presign-form" class="inline-form presign">
+              <label for="presign-key">Key</label><input id="presign-key" required>
+              <label for="presign-method">Method</label>
+              <select id="presign-method"><option value="get">GET</option><option value="put">PUT</option></select>
+              <label for="presign-expiry">Seconds</label><input id="presign-expiry" type="number" value="3600" min="1">
+              <button type="submit">Generate URL</button>
+            </form>
+            <output id="presign-result"></output>
+          </article>
+
+          <div class="debug-grid">
+            <article class="panel"><div class="section-heading compact"><h3>Config</h3><button data-debug="/debug/config" data-target="config-output">Load</button></div><pre id="config-output">Not loaded.</pre></article>
+            <article class="panel"><div class="section-heading compact"><h3>DB migrations</h3><button data-debug="/debug/db" data-target="db-output">Load</button></div><pre id="db-output">Not loaded.</pre></article>
+            <article class="panel"><div class="section-heading compact"><h3>Observability</h3><button data-debug="/debug/obs" data-target="obs-output">Load</button></div><pre id="obs-output">Not loaded.</pre></article>
+          </div>
+        </section>
+
+        <section id="verify">
+          <div class="section-heading">
+            <div><p class="eyebrow">04 / intelligence</p><h2>Verify</h2></div>
+            <button id="load-models" type="button">List gateway models</button>
+          </div>
+          <p class="callout">
+            Semantic search remains available without inference by using the same deterministic
+            fallback embeddings as the offline seed. Chat, model listing, and fresh summary streams
+            require a configured gateway.
+          </p>
+          <div class="split">
+            <form id="search-form" class="panel">
+              <h3>Semantic search</h3>
+              <label for="search-query">Query</label>
+              <input id="search-query" required value="How do visibility timeouts help workers?">
+              <label for="search-limit">Hits</label>
+              <input id="search-limit" type="number" min="1" max="20" value="5">
+              <button type="submit">Search</button>
+              <div id="search-results"></div>
+            </form>
+            <article class="panel">
+              <h3>Gateway models</h3>
+              <pre id="models-output">Not loaded.</pre>
+            </article>
+          </div>
+          <div class="split">
+            <form id="chat-form" class="panel inference-required">
+              <h3>Document chat</h3>
+              <label for="chat-document">Document</label><select id="chat-document" required></select>
+              <label for="chat-message">Next user turn</label><textarea id="chat-message" required rows="3">What is the practical lesson?</textarea>
+              <button type="submit">Send turn</button>
+              <button id="chat-reset" type="button" class="secondary">Reset turns</button>
+              <div id="chat-transcript"></div>
+            </form>
+            <form id="summary-form" class="panel inference-required">
+              <h3>Fresh streamed summary</h3>
+              <label for="summary-document">Document</label><select id="summary-document" required></select>
+              <button type="submit">Stream summary</button>
+              <output id="summary-output" class="stream-output"></output>
+            </form>
+          </div>
+        </section>
+
+        <section id="analytics">
+          <div class="section-heading">
+            <div><p class="eyebrow">05 / product behavior</p><h2>Analytics</h2></div>
+            <button id="analytics-refresh" type="button">Refresh reports</button>
+          </div>
+          <p id="analytics-guidance" class="callout">
+            Analytics is opt-in on a separate database. Set <code>MINI_ANALYTICS_DSN</code> when this
+            section reports unavailable.
+          </p>
+          <article class="panel identity-panel">
+            <div><h3>Browser identity</h3><p>Stable IDs are sent with document, search, and chat requests.</p></div>
+            <dl><dt>Distinct ID</dt><dd><code id="distinct-id"></code></dd><dt>Session ID</dt><dd><code id="session-id"></code></dd></dl>
+            <button id="identity-reset" type="button">Reset IDs</button>
+          </article>
+          <div class="analytics-reports">
+            <article class="panel"><h3>Four-step funnel</h3><div id="funnel-output">Not loaded.</div></article>
+            <article class="panel"><h3>Weekly retention</h3><div id="retention-output">Not loaded.</div></article>
+            <article class="panel"><h3>Recent events</h3><div id="events-output">Not loaded.</div></article>
+            <article class="panel"><h3>Generated SQL</h3><pre id="sql-output">Not loaded.</pre></article>
+          </div>
+          <div class="debug-grid">
+            <form id="capture-form" class="panel">
+              <h3>Capture</h3>
+              <label for="capture-event">Event</label><input id="capture-event" value="console_explored" required>
+              <label for="capture-properties">Properties JSON</label><textarea id="capture-properties" rows="3">{"surface":"web-console"}</textarea>
+              <button type="submit">Capture event</button><output id="capture-result"></output>
+            </form>
+            <form id="identify-form" class="panel">
+              <h3>Identify</h3>
+              <label for="identify-id">Distinct ID</label><input id="identify-id" required>
+              <label for="identify-properties">Properties JSON</label><textarea id="identify-properties" rows="3">{"role":"developer"}</textarea>
+              <button type="submit">Identify actor</button><output id="identify-result"></output>
+            </form>
+            <form id="alias-form" class="panel">
+              <h3>Alias</h3>
+              <label for="alias-previous">Previous ID</label><input id="alias-previous" required>
+              <label for="alias-current">Identified ID</label><input id="alias-current" value="developer@example.test" required>
+              <button type="submit">Alias actor</button><output id="alias-result"></output>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

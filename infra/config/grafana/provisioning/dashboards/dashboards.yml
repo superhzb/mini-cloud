@@ -1,0 +1,15 @@
+# Load any dashboard JSON dropped into /var/lib/grafana/dashboards (mounted from
+# infra/config/grafana/dashboards). The scaffolder writes one dashboard per app here.
+apiVersion: 1
+
+providers:
+  - name: mini-cloud
+    orgId: 1
+    folder: mini-cloud
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

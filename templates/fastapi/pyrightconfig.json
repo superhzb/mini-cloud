@@ -1,0 +1,4 @@
+{
+  "extends": "../mini-cloud/tooling/pyright-base.json",
+  "include": ["src", "tests"]
+}

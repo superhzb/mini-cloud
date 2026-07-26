@@ -1,0 +1,13 @@
+{
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.12",
+  "reportPrivateUsage": "none",
+  "reportUnusedFunction": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownLambdaType": "none",
+  "reportMissingTypeStubs": "none",
+  "reportDeprecated": "none"
+}

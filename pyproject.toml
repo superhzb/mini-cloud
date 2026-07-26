@@ -1,0 +1,44 @@
+# mini-cloud — uv workspace root.
+#
+# Ties the independently-versioned SDK packages, the scaffolder, and the in-repo reference
+# apps together for local development. Each member keeps its OWN version and dependency set
+# (see docs/MINI_CLOUD_ARCHITECTURE.md → Decoupling model); this root only wires editable
+# path resolution so `uv sync` gives you the whole workspace at once.
+#
+#   uv sync --all-packages        # install every member editable
+#   uv run --package mini-cloud-db pytest   # test one package
+#
+# This root is NOT published and has no runtime code of its own.
+
+[project]
+name = "mini-cloud-workspace"
+version = "0"
+description = "mini-cloud dev workspace (not published)."
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["packages/*", "scaffolder", "examples/*"]
+
+# Consumers pin published versions; inside this workspace every member resolves to its
+# editable source so a change in `config` is seen instantly by `db`, the reference app, etc.
+[tool.uv.sources]
+mini-cloud-config = { workspace = true }
+mini-cloud-db = { workspace = true }
+mini-cloud-storage = { workspace = true }
+mini-cloud-obs = { workspace = true }
+mini-cloud-inference = { workspace = true }
+mini-cloud-analytics = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+  "pyright>=1.1.400",
+  "ruff>=0.11.0",
+]
+
+[tool.ruff]
+extend = "tooling/ruff-base.toml"
+# templates/ holds `{{placeholder}}` files that aren't valid source until `mini new` renders them.
+extend-exclude = ["templates"]

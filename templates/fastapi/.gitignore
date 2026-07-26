@@ -1,0 +1,16 @@
+# Secrets — never commit. `mini new` wrote .env for you; keep it local.
+.env
+**/.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# OS
+.DS_Store

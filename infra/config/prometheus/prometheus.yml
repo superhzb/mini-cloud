@@ -1,0 +1,38 @@
+# Prometheus scrape config for the mini-cloud infra stack.
+# Apps are scraped by adding a job here (or, later, via file_sd the scaffolder writes).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Grafana exposes /metrics.
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]
+
+  # Loki exposes /metrics.
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+
+  # MinIO metrics (public cluster endpoint; no auth needed for v2 cluster metrics on loopback).
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+
+  # --- App targets ---------------------------------------------------------------
+  # The scaffolder appends one job per app here. Apps expose /metrics on their PORT.
+  # Example:
+  # - job_name: fr-hub-api
+  #   static_configs:
+  #     - targets: ["host.docker.internal:19204"]
+
+  - job_name: ref-showcase
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:19208"]

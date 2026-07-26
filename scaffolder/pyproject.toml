@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mini-scaffolder"
+description = "`mini new` + `mini score` — app scaffolder and readiness checker for mini-cloud."
+readme = "README.md"
+authors = [{ name = "Brett Huang" }]
+requires-python = ">=3.12"
+version = "0.1.0"
+# Stdlib-only on purpose: the scaffolder shells out to infra's own tested scripts (create-project,
+# etc.) rather than pulling psycopg/boto3 as a control-plane dependency.
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.0",
+  "pyright>=1.1.400",
+  "ruff>=0.11.0",
+]
+
+[project.scripts]
+mini = "mini_scaffolder.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mini_scaffolder"]
+
+# Phase 0: consume the shared base tooling config instead of copying it.
+[tool.ruff]
+extend = "../tooling/ruff-base.toml"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+pythonpath = ["src"]
+testpaths = ["tests"]

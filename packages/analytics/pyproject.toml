@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mini-cloud-analytics"
+description = "Mixpanel-style product analytics (capture / identify / alias, funnels, retention) on the shared mini-cloud Postgres, with a PostHog-compatible client surface."
+readme = "README.md"
+authors = [{ name = "Brett Huang" }]
+requires-python = ">=3.12"
+version = "0.1.0"
+dependencies = [
+  "mini-cloud-config>=0.1.0",
+  "mini-cloud-db>=0.1.0",
+  "prometheus-client>=0.20.0",
+]
+
+[project.optional-dependencies]
+# The PostHog graduation seam needs posthog-python; the core Postgres path does not, so it's an
+# extra — exactly how obs pushes starlette into [asgi].
+posthog = ["posthog>=3.0.0"]
+
+[dependency-groups]
+dev = ["pytest>=8.3.0", "pyright>=1.1.400", "ruff>=0.11.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mini_cloud"]
+
+[tool.ruff]
+extend = "../../tooling/ruff-base.toml"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+  "live: hits a real analytics Postgres; run with MINI_ANALYTICS_DSN and --run-live",
+]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,0 +1,37 @@
+# Auto-provisioned Grafana datasources — Loki + Prometheus wired on first boot.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+
+  # The first Postgres datasource in the stack — the shared `analytics` product-event store
+  # (mini_cloud.analytics), read through a SELECT-only role. Provisioned by `make analytics-init`.
+  # Analytics dashboards bind their panels to this uid ("analytics").
+  - name: Analytics
+    type: postgres
+    uid: analytics
+    access: proxy
+    url: postgres:5432
+    user: analytics_ro
+    jsonData:
+      database: analytics
+      sslmode: disable
+      postgresVersion: 1600
+    secureJsonData:
+      password: analytics_ro

@@ -1,0 +1,27 @@
+# mini-cloud shared ruff base config.
+#
+# Consume from a project's pyproject.toml:
+#
+#   [tool.ruff]
+#   extend = "../mini-cloud/tooling/ruff-base.toml"   # adjust relative path
+#
+# ...then add only project-specific overrides. This replaces the ruff block copied
+# verbatim into ~25 pyproject.toml files across the workspace.
+
+target-version = "py312"
+line-length = 100
+
+[lint]
+# E/F: pycodestyle+pyflakes. I: import sorting. B: bugbear. UP: pyupgrade.
+# ANN: require annotations (matches mlx-platform's house style).
+select = ["E", "F", "I", "B", "UP", "ANN"]
+
+[lint.per-file-ignores]
+# Tests drive dynamically-typed HTTP/OpenAI clients and pytest fixtures (tmp_path, monkeypatch,
+# …) that are injected untyped; loosen line length + annotation rules there. Slash-free patterns
+# match the basename at any depth (nested package `tests/` dirs included).
+"test_*.py" = ["E501", "ANN"]
+"conftest.py" = ["E501", "ANN"]
+
+[lint.flake8-annotations]
+suppress-none-returning = true

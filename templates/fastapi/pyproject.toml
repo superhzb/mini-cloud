@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "{{name}}"
+description = "{{description}}"
+readme = "README.md"
+requires-python = ">=3.12"
+version = "0.1.0"
+dependencies = [
+  "mini-cloud-config{{sdk_version}}",
+  "mini-cloud-db{{sdk_version}}",
+  "mini-cloud-storage{{sdk_version}}",
+  "mini-cloud-obs[asgi]{{sdk_version}}",
+  "mini-cloud-inference{{sdk_version}}",
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3.0", "pyright>=1.1.400", "ruff>=0.11.0", "httpx>=0.27.0"]
+
+[project.scripts]
+{{name}} = "{{package}}.__main__:main"
+{{name}}-worker = "{{package}}.worker:main"
+
+# Generated apps are siblings of the mini-cloud repo; resolve the SDK from its workspace by path
+# during local dev. On graduation to a VPS, publish the SDK and pin the versions instead.
+[tool.uv.sources]
+mini-cloud-config = { path = "../mini-cloud/packages/config", editable = true }
+mini-cloud-db = { path = "../mini-cloud/packages/db", editable = true }
+mini-cloud-storage = { path = "../mini-cloud/packages/storage", editable = true }
+mini-cloud-obs = { path = "../mini-cloud/packages/obs", editable = true }
+mini-cloud-inference = { path = "../mini-cloud/packages/inference", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{package}}"]
+
+[tool.ruff]
+extend = "../mini-cloud/tooling/ruff-base.toml"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+markers = ["live: hits the real infra stack; run with --run-live and canonical env"]
+pythonpath = ["src"]
+testpaths = ["tests"]

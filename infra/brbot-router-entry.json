@@ -1,0 +1,8 @@
+{
+  "name": "mini-cloud-infra",
+  "path": "../mini-cloud/infra",
+  "command": "docker compose up",
+  "alwaysOn": true,
+  "readinessPorts": [15432, 19000, 13000],
+  "siteUrl": "http://localhost:13000"
+}

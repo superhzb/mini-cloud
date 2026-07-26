@@ -1,0 +1,15 @@
+# mini-cloud shared pytest defaults.
+#
+# pytest has no config-inheritance mechanism, so copy this [tool.pytest.ini_options]
+# block into a project's pyproject.toml (adjust pythonpath/testpaths as needed).
+# It is kept here as the canonical starting point so every project begins identically.
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+    "live: hits real services / network; run with --live",
+    "smoke: boot + one real round-trip; deploy gate",
+]

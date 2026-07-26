@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mini-cloud-storage"
+description = "S3/MinIO object storage client bound to a per-project bucket, for mini-cloud apps."
+readme = "README.md"
+authors = [{ name = "Brett Huang" }]
+requires-python = ">=3.12"
+version = "0.1.0"
+dependencies = [
+  "mini-cloud-config>=0.1.0",
+  "boto3>=1.35.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3.0", "pyright>=1.1.400", "ruff>=0.11.0", "boto3-stubs[s3]>=1.35.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mini_cloud"]
+
+[tool.ruff]
+extend = "../../tooling/ruff-base.toml"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+markers = ["live: hits a real MinIO/S3; run with --run-live and STORAGE_* env"]
+pythonpath = ["src"]
+testpaths = ["tests"]

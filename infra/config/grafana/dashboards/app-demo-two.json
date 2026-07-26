@@ -1,0 +1,67 @@
+{
+  "title": "app \u00b7 demo-two",
+  "uid": "app-demo-two",
+  "tags": [
+    "mini-cloud",
+    "app",
+    "demo-two"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "request rate (req/s)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{app=\"demo-two\"}[5m]))",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 latency (s)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{app=\"demo-two\"}[5m])) by (le))",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "logs",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "{app=\"demo-two\"}",
+          "datasource": {
+            "type": "loki"
+          }
+        }
+      ]
+    }
+  ]
+}
