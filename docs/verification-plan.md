@@ -59,7 +59,7 @@ under the default.
 *As the host operator, I bring up all services on a LAN-reachable address so Machine B can reach them.*
 
 1. On Machine A, in `infra/.env`: set `INFRA_BIND_ADDR` to Machine A's **specific LAN IP** (e.g.
-   `192.168.0.42`), never `0.0.0.0`.
+   `192.168.0.12`), never `0.0.0.0`.
 2. **Replace the dev credentials** — `POSTGRES_PASSWORD`, `STORAGE_ACCESS_KEY`/`STORAGE_SECRET_KEY`
    (drop `minioadmin`/`*_dev_change_me`), and `GRAFANA_ADMIN_PASSWORD`. Leaving loopback makes these a
    real trust boundary.
@@ -71,14 +71,14 @@ under the default.
    actually accept connections there).
 
 **Acceptance:**
-- `make -C infra ps` → all six containers healthy, bound to `192.168.0.42:<rare-port>`.
+- `make -C infra ps` → all six containers healthy, bound to `192.168.0.12:<rare-port>`.
 - From **Machine B**:
-  - `pg_isready -h 192.168.0.42 -p 15432`
-  - `curl http://192.168.0.42:19000/minio/health/live`
-  - `curl http://192.168.0.42:13100/ready`
-  - `curl http://192.168.0.42:19090/-/healthy`
-  - `curl http://192.168.0.42:13000/api/health`
-  - `curl http://192.168.0.42:19207/v1/models` (MLX)
+  - `pg_isready -h 192.168.0.12 -p 15432`
+  - `curl http://192.168.0.12:19000/minio/health/live`
+  - `curl http://192.168.0.12:13100/ready`
+  - `curl http://192.168.0.12:19090/-/healthy`
+  - `curl http://192.168.0.12:13000/api/health`
+  - `curl http://192.168.0.12:19207/v1/models` (MLX)
 
   …all succeed.
 
@@ -88,20 +88,29 @@ under the default.
 
 *As a developer on the other Mac, I scaffold a working, routed app in one command.*
 
-1. On Machine B, point the scaffolder at Machine A. In the infra `.env` the scaffolder reads (or via
-   env), `INFRA_BIND_ADDR=192.168.0.42`, plus the router API vars:
-   `MINI_ROUTER_API_URL=http://192.168.0.42:<router-port>`, `MINI_ROUTER_API_TOKEN=<token>`,
-   `MINI_ROUTER_API_HOST=<router DASHBOARD_DOMAIN>`.
+0. On Machine B, install the provisioning CLIs on `PATH`: `psql` (`brew install libpq`, keg-only →
+   add its bin to `PATH`) and `mc` (`brew install minio-mc`). Provisioning talks to Postgres
+   `:15432` / MinIO `:19000` over the LAN directly (no Docker on B).
+1. On Machine B, create `infra/.env` (only `.env.example` is committed) and point the scaffolder at
+   Machine A:
+   - **Connect address:** `INFRA_BIND_ADDR=192.168.0.12` (or leave it `0.0.0.0` and set
+     `INFRA_CONNECT_ADDR=192.168.0.12`). Both `create-project.sh` and the emitted app `.env` use it.
+   - **Admin provisioning creds — must match Machine A's** (Story 1 step 2 replaced the dev
+     defaults): `POSTGRES_PASSWORD` (Postgres admin) and `STORAGE_ACCESS_KEY`/`STORAGE_SECRET_KEY`
+     (MinIO root). Provisioning connects *as admin* from B, so without these it fails with auth
+     errors (psql falls back to `postgres`, mc to `minioadmin`). This is the one real secret B needs.
+   - **Router API vars:** `MINI_ROUTER_API_URL=http://192.168.0.12:<router-port>`,
+     `MINI_ROUTER_API_TOKEN=<token>`, `MINI_ROUTER_API_HOST=<router DASHBOARD_DOMAIN>`.
 2. `mini new demo-lan --type fastapi`
 
 **Observe each of the 7 scaffold steps report success:** allocate ports (19101–19299) → render
-template → **provision DB + bucket on Machine A** → write canonical `.env` (with `192.168.0.42` URLs)
+template → **provision DB + bucket on Machine A** → write canonical `.env` (with `192.168.0.12` URLs)
 → **register the brbot-router route via live `POST /routes`** → drop the per-app Grafana dashboard →
 `uv sync` + `git init`.
 
 **Acceptance:**
 - The generated `../demo-lan/.env` shows `DATABASE_URL`, `STORAGE_ENDPOINT`, `LOKI_URL`,
-  `MINI_INFERENCE_URL` all on `192.168.0.42` (proves the bind fix).
+  `MINI_INFERENCE_URL` all on `192.168.0.12` (proves the bind fix).
 - `mini score ../demo-lan` prints **7/7**.
 - `make -C ../demo-lan run` boots; `curl <app>/readyz` → green (it reached its DB + bucket on A).
 
@@ -113,13 +122,13 @@ template → **provision DB + bucket on Machine A** → write canonical `.env` (
 |---|---|---|---|
 | 3 | **Postgres (db-per-project)** | `make -C ../demo-lan migrate`; hit an endpoint that writes a row | Row visible via `make -C infra psql` / Adminer on A in the app's *own* db+role; the app role **cannot** see other projects' DBs (least-privilege) |
 | 4 | **Job queue** | Enqueue a job via an endpoint; run `make -C ../demo-lan worker` | Job moves pending → done; force a failure → lands in `mini_cloud_dead_letter`; `requeue_dead_letter()` re-runs it |
-| 5 | **Object storage (bucket-per-project)** | Upload-file endpoint; list; presigned GET | Object appears in the app's bucket in the MinIO console (`192.168.0.42:19001`); presigned URL downloads; delete works |
+| 5 | **Object storage (bucket-per-project)** | Upload-file endpoint; list; presigned GET | Object appears in the app's bucket in the MinIO console (`192.168.0.12:19001`); presigned URL downloads; delete works |
 | 6 | **Inference (MLX)** | `POST /search` (embed) and a chat endpoint | Real embeddings + chat completion returned; requests carry `X-MLX-Project`; `GET /inference/models` lists models. (If this fails from B but works on A, the gateway is loopback-only — see Story 1 step 5.) |
 | 7 | **Logs (Loki)** | Generate traffic; open Grafana Explore | App's structured logs queryable, filtered to `demo-lan`; correlation-id threads request → job |
 | 8 | **Metrics (Prometheus)** | `curl <app>/metrics`; open Grafana | Prometheus scrapes the app; the auto-dropped per-app dashboard shows request rate + p95 |
 | 9 | **Analytics** | Fire the funnel events; run funnel/retention | Events land in the separate `analytics` DB; the Grafana analytics dashboard renders the funnel; the read-only role can `SELECT` but not `INSERT` |
 
-Grafana for all observability stories: `http://192.168.0.42:13000`.
+Grafana for all observability stories: `http://192.168.0.12:13000`.
 
 ---
 

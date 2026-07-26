@@ -60,6 +60,22 @@ make project NAME=demo-x
 
 (The scaffolder automates this in Phase 4; this is the manual path.)
 
+`create-project.sh` provisions **over the network** — `psql` against `:15432` and `mc` against
+`:19000` — the way you'd talk to a managed Postgres/S3, rather than shelling into the containers.
+That means it also runs from **any machine on the LAN** (e.g. a second Mac running only the `mini`
+CLI), not just the Docker host. Requirements on whichever machine runs it:
+
+- **`psql`** (from `libpq`) and **`mc`** (MinIO client) on `PATH`. On macOS: `brew install libpq
+  minio-mc` — `libpq` is keg-only, so add its bin to `PATH`
+  (`export PATH="$(brew --prefix libpq)/bin:$PATH"`).
+- A local `infra/.env` carrying the admin `POSTGRES_PASSWORD` + `STORAGE_ACCESS_KEY`/
+  `STORAGE_SECRET_KEY`, and a bind/connect address that points at the host running the stack.
+  `INFRA_BIND_ADDR` is a *bind* address: `0.0.0.0`/empty maps to `127.0.0.1` automatically. To
+  reach a **remote** host, set `INFRA_CONNECT_ADDR=<host LAN IP>` (this overrides the connect
+  target for both the script and the `.env` the scaffolder writes).
+- Postgres `:15432` and MinIO `:19000` reachable from that machine (i.e. the stack is bound to a
+  routable interface, not loopback-only).
+
 ## Backups
 
 ```bash

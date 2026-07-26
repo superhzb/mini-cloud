@@ -29,7 +29,8 @@ SDK package (Phase 2) loads exactly these keys.
 | `PORT` | The port this app's HTTP server binds (canonical — replaces `API_PORT`, `--port`) | per port registry |
 | `LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` | `info` |
 | `APP_ENV` | `dev` \| `staging` \| `prod` (replaces prod/staging directory copies) | `dev` |
-| `INFRA_BIND_ADDR` | Interface the infra stack binds (infra host only) | `127.0.0.1` |
+| `INFRA_BIND_ADDR` | Interface the infra stack binds (infra host only). A *bind* address — `0.0.0.0`/empty is treated as `127.0.0.1` when used as a connect target. | `127.0.0.1` |
+| `INFRA_CONNECT_ADDR` | Overrides the host that `create-project.sh` / the scaffolder *connect to* for provisioning + the emitted `DATABASE_URL`/`STORAGE_ENDPOINT`. Set to the infra host's LAN IP when running `mini new` from another machine. Defaults to `INFRA_BIND_ADDR` (with the `0.0.0.0`→loopback mapping). | `192.168.0.12` |
 | `ROUTE_REGISTRATION_TOKEN` | **brbot-router** bearer token that enables the `POST /routes` registration API. Unset ⇒ API disabled (default). | — |
 | `MINI_ROUTER_API_URL` | Scaffolder → router API base URL (client side). Defaults to `http://127.0.0.1:<router PORT>`. | `http://machine-a.local:9000` |
 | `MINI_ROUTER_API_TOKEN` | Scaffolder's copy of `ROUTE_REGISTRATION_TOKEN`. When unset (and none in the router's `.env`), `mini new` writes `projects.json` directly. | — |

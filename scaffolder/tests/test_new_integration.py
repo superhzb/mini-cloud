@@ -12,10 +12,25 @@ from pathlib import Path
 import pytest
 
 from mini_scaffolder.layout import Workspace
-from mini_scaffolder.new import TEMPLATE_TYPES, run_new
+from mini_scaffolder.new import TEMPLATE_TYPES, _connect_host, run_new
 from mini_scaffolder.score import score_repo
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({}, "127.0.0.1"),  # unset → loopback
+        ({"INFRA_BIND_ADDR": "127.0.0.1"}, "127.0.0.1"),
+        ({"INFRA_BIND_ADDR": "0.0.0.0"}, "127.0.0.1"),  # bind wildcard is not connectable
+        ({"INFRA_BIND_ADDR": ""}, "127.0.0.1"),
+        ({"INFRA_BIND_ADDR": "192.168.0.12"}, "192.168.0.12"),  # LAN IP passes through
+        ({"INFRA_BIND_ADDR": "0.0.0.0", "INFRA_CONNECT_ADDR": "192.168.0.12"}, "192.168.0.12"),
+    ],
+)
+def test_connect_host_maps_bind_wildcard(env: dict[str, str], expected: str) -> None:
+    assert _connect_host(env) == expected
 
 
 def _workspace(tmp_path: Path) -> Workspace:

@@ -84,10 +84,25 @@ def _infra_env(infra_dir: Path) -> dict[str, str]:
     return env
 
 
+def _connect_host(infra_env: dict[str, str]) -> str:
+    """The host an app should *connect to* for infra services.
+
+    ``INFRA_BIND_ADDR`` is a bind address: ``0.0.0.0`` (or empty) means "all interfaces" and is not
+    a routable target, so map it to loopback — matching ``infra/scripts/create-project.sh``. When
+    the stack is bound to a specific host IP (a LAN-bound stack reached from another machine) that
+    IP is already the right connect target. ``INFRA_CONNECT_ADDR`` overrides explicitly.
+    """
+    override = infra_env.get("INFRA_CONNECT_ADDR", "").strip()
+    if override:
+        return override
+    bind = infra_env.get("INFRA_BIND_ADDR", "127.0.0.1").strip()
+    return "127.0.0.1" if bind in ("", "0.0.0.0") else bind
+
+
 def _env_file(
     name: str, api_port: int, db_password: str, infra_env: dict[str, str], *, provisioned: bool
 ) -> str:
-    bind = infra_env.get("INFRA_BIND_ADDR", "127.0.0.1")
+    bind = _connect_host(infra_env)
     access = infra_env.get("STORAGE_ACCESS_KEY", "minioadmin")
     secret = infra_env.get("STORAGE_SECRET_KEY", "minioadmin_dev_change_me")
     # No inline comments inside a value — the dotenv parser treats the rest of the line as the
