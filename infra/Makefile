@@ -10,7 +10,7 @@ help: ## Show this help
 up: ## Start the whole stack (detached)
 	@test -f .env || { echo "no .env — run: cp .env.example .env"; exit 1; }
 	$(COMPOSE) up -d
-	@echo "Grafana → http://localhost:3000   MinIO console → http://localhost:9001   Adminer (DB) → http://localhost:18432"
+	@echo "Grafana → http://localhost:13000   MinIO console → http://localhost:19001   Adminer (DB) → http://localhost:18432"
 
 down: ## Stop the stack (keeps volumes/data)
 	$(COMPOSE) down
@@ -51,10 +51,10 @@ analytics-init: ## Create the shared `analytics` DB + read-only Grafana role + s
 	./scripts/analytics-init.sh
 
 grafana: ## Open Grafana
-	open http://localhost:3000
+	open http://localhost:13000
 
 minio: ## Open MinIO console
-	open http://localhost:9001
+	open http://localhost:19001
 
 adminer: ## Open Adminer DB browser (server: postgres, login from .env, then pick a DB)
 	open http://localhost:18432

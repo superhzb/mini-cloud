@@ -35,10 +35,11 @@ mini-cloud/
 | 3 | Inference SDK module (`inference`) | ✅ done |
 | 4 | Scaffolder (`mini new`) + templates | ✅ done |
 | 4.6 | Scorecard checker (`mini score`) + adoption guide | ✅ done |
-| 4.5 | Remote route registration (touches brbot-router) | ▫️ not started |
-| 5 | TS SDK + frontend template | ▫️ not started |
+| 4.5 | Remote route registration (touches brbot-router) | ✅ done |
+| — | Analytics SDK (`mini-cloud-analytics`) + funnel/retention + Grafana | ✅ done |
+| 5 | TS SDK + frontend template (`vite`/`node` templates still skeletons) | ▫️ not started |
 | 6 | Identity service | ▫️ deferred |
-| 7 | Graduation playbook + analytics | ▫️ not started |
+| 7 | Graduation playbook | ▫️ not started |
 
 ### Try it (no infra needed)
 
