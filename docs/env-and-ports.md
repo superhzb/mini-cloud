@@ -25,6 +25,9 @@ SDK package (Phase 2) loads exactly these keys.
 | `MINI_ANALYTICS_DSN` | Postgres DSN to the shared `analytics` product-event store (`mini_cloud.analytics`). Distinct from `DATABASE_URL` — a separate DB on the same `:15432`. | `postgresql://analytics_ro:...@127.0.0.1:15432/analytics` |
 | `MINI_ANALYTICS_BACKEND` | `postgres` \| `posthog` — event sink. `posthog` is the documented graduation seam. | `postgres` |
 | `MINI_ANALYTICS_PROJECT` | Tags analytics events with the calling project. Optional — defaults to `APP_NAME`. | `<app>` |
+| `MINI_AUTH_ISSUER` | `mini-cloud-identity` base URL; the platform JWT `iss`. Set on any app that adopts auth (`mini-cloud-auth`); the verifier reads public keys from its JWKS. | `https://identity.brettbot.ca` |
+| `MINI_AUTH_JWKS_URL` | JWKS endpoint the verifier fetches public keys from. Optional — defaults to `${MINI_AUTH_ISSUER}/.well-known/jwks.json`. | — |
+| `MINI_AUTH_AUDIENCE` | Expected JWT `aud` — the **fixed** platform audience. Optional — defaults to `mini-cloud`. Not per-app: per-app authorization is the `grants[app]` claim, never `aud`. | `mini-cloud` |
 | `HF_TOKEN` | Hugging Face token (canonical — replaces `HUGGING_FACE_HUB_TOKEN`) | — |
 | `PORT` | The port this app's HTTP server binds (canonical — replaces `API_PORT`, `--port`) | per port registry |
 | `LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` | `info` |
@@ -71,16 +74,18 @@ its native port internally — only the host-published port is remapped in `dock
 |---|---|---|
 | `brbot-router` dashboard | (router-owned) | control plane |
 | `mlx-platform` gateway | `19207` | native, Apple-GPU; `MINI_INFERENCE_URL` points here |
+| `mini-cloud-identity` | `19210` | thin Google-OAuth→JWT IdP; `MINI_AUTH_ISSUER` points here. Registers via `POST /routes` like an app. In-repo at `services/identity/`; its own `identity` DB (`make -C infra identity-init`). |
 
 ### Application ranges (assigned by the scaffolder)
 
 | Range | Purpose | In use |
 |---|---|---|
 | `19101–19199` | app **web** dev servers | 19101 local-tube, 19102 fr-tiktok, 19103 par-ici, 19104 fr-hub, 19105/06 srt-flow |
-| `19201–19299` | app **API** servers | 19204 fr-hub-api, 19205 srt-flow prod, 19206 srt-flow stg, 19207 **mlx-platform (reserved)**, 19208 ref-showcase (in-repo example) |
+| `19201–19299` | app **API** servers | 19204 fr-hub-api, 19205 srt-flow prod, 19206 srt-flow stg, 19207 **mlx-platform (reserved)**, 19208 ref-showcase (in-repo example), 19210 **mini-cloud-identity (reserved)** |
 
 `mini new` picks the next free web/API pair from these ranges and records it in
-`brbot-router/projects.json`. **19207 is reserved for the MLX gateway** — do not assign it to an app.
+`brbot-router/projects.json`. **19207 is reserved for the MLX gateway** and **19210 for
+`mini-cloud-identity`** — do not assign either to an app.
 
 ## Notes on binding & security
 

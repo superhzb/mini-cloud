@@ -18,7 +18,7 @@ requires-python = ">=3.12"
 dependencies = []
 
 [tool.uv.workspace]
-members = ["packages/*", "scaffolder", "examples/*"]
+members = ["packages/*", "scaffolder", "examples/*", "services/*"]
 
 # Consumers pin published versions; inside this workspace every member resolves to its
 # editable source so a change in `config` is seen instantly by `db`, the reference app, etc.
@@ -29,6 +29,8 @@ mini-cloud-storage = { workspace = true }
 mini-cloud-obs = { workspace = true }
 mini-cloud-inference = { workspace = true }
 mini-cloud-analytics = { workspace = true }
+mini-cloud-auth = { workspace = true }
+mini-cloud-identity = { workspace = true }
 
 [dependency-groups]
 dev = [

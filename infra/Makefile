@@ -50,6 +50,9 @@ project: ## Create a DB+bucket for a project: make project NAME=demo-x
 analytics-init: ## Create the shared `analytics` DB + read-only Grafana role + schema
 	./scripts/analytics-init.sh
 
+identity-init: ## Create the empty `identity` DB + owner role (schema owned by the identity service)
+	./scripts/identity-init.sh
+
 grafana: ## Open Grafana
 	open http://localhost:13000
 

@@ -52,6 +52,53 @@ one does not require the rest (per the decoupling model).
    `Analytics.from_settings(settings, source=analytics_pool)` and `capture`/`identify`/`alias` at
    intentional product moments. Not scored — opt-in. `MINI_ANALYTICS_BACKEND=posthog` is the env-only
    seam to real PostHog later.
+6. **`auth`** *(optional)* — add platform identity (Google login → per-app authorization) when a demo
+   needs to know *who* the user is. Not scored — opt-in. See **Wire auth in 3 lines** below.
+
+### Wire auth in 3 lines
+
+Platform-wide identity, per-app authorization: [`mini-cloud-identity`](#) logs a human in through
+Google and mints a short-lived, asymmetrically-signed platform JWT carrying a `grants` claim
+(`{app: role}`). Your app never touches Google or any secret — it verifies the JWT against the
+issuer's public keys (JWKS) and enforces the grant. Three moves:
+
+```python
+# 1. depend on the SDK (verifier + FastAPI dependency)
+#    pyproject:  "mini-cloud-auth[fastapi]>=0.1.0"
+
+# 2. set three env vars (JWKS_URL/AUDIENCE default sensibly — issuer is the only required one)
+#    MINI_AUTH_ISSUER=https://identity.brettbot.ca
+
+# 3. guard a route
+from fastapi import Depends
+from mini_cloud.auth import Principal
+from mini_cloud.auth.fastapi import require_user
+
+@app.get("/whoami")
+def whoami(user: Principal = Depends(require_user(app="my-app", role="member"))):
+    return {"email": user.email, "role": user.role_for("my-app")}
+```
+
+That's it: **401** without a valid token, **403** without a `my-app` grant of `member`-or-higher,
+**200** otherwise. Roles rank `viewer < member < admin` (an `admin` clears a `member` gate); pass
+`role=None` and read `user.role_for(app)` for a bespoke ladder. Grant rows (`email, app, role`) live
+in the identity service's `identity` DB (`make -C ../mini-cloud/infra identity-init` creates it);
+your app is storage-agnostic — it only ever sees the JWT. Test offline with a fixture keypair and
+`TokenVerifier.from_jwks_set` — see `examples/ref-showcase/tests/test_auth_tour_unit.py`.
+
+**Get a real token without a browser (local dev).** The identity service exposes a dev-only password
+grant, on by default locally and seeded with an `admin`/`admin` platform admin (a `"*"` grant that
+authorizes every app). It mints the *same* JWT as the Google path, so it's what feeds `curl` and
+`MINI_AUTH_TEST_TOKEN` in live tests:
+
+```bash
+curl -s localhost:19210/dev/token -d '{"username":"admin","password":"admin"}' \
+     -H 'content-type: application/json' | jq -r .access_token
+```
+
+It **fails closed** — the service refuses to boot with it enabled on a non-local deployment, so it's
+never a login path in production (`MINI_AUTH_DEV_LOGIN=0` on graduation). The gateway-trust step
+(retiring `X-MLX-Project`-as-auth) is deferred; see `docs/identity-plan.md`.
 
 Provision the repo's DB + bucket once (if not already): `make -C ../mini-cloud/infra project
 NAME=<repo>`.

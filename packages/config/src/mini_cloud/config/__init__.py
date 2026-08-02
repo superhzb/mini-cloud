@@ -103,6 +103,10 @@ class Settings:
     analytics_dsn: str | None = None  # MINI_ANALYTICS_DSN (shared analytics event store)
     analytics_backend: AnalyticsBackend = "postgres"  # MINI_ANALYTICS_BACKEND
     analytics_project: str | None = None  # MINI_ANALYTICS_PROJECT (defaults to APP_NAME at client)
+    # --- identity ------------------------------------------------------------------
+    auth_issuer: str | None = None  # MINI_AUTH_ISSUER (identity service URL; the JWT `iss`)
+    auth_jwks_url: str | None = None  # MINI_AUTH_JWKS_URL (default: ${issuer}/.well-known/jwks)
+    auth_audience: str = "mini-cloud"  # MINI_AUTH_AUDIENCE (fixed platform aud; authZ is `grants`)
     # --- misc ----------------------------------------------------------------------
     hf_token: str | None = None  # HF_TOKEN
     port: int | None = None  # PORT
@@ -141,6 +145,9 @@ _FIELD_TO_ENV: dict[str, str] = {
     "analytics_dsn": "MINI_ANALYTICS_DSN",
     "analytics_backend": "MINI_ANALYTICS_BACKEND",
     "analytics_project": "MINI_ANALYTICS_PROJECT",
+    "auth_issuer": "MINI_AUTH_ISSUER",
+    "auth_jwks_url": "MINI_AUTH_JWKS_URL",
+    "auth_audience": "MINI_AUTH_AUDIENCE",
     "hf_token": "HF_TOKEN",
     "port": "PORT",
     "log_level": "LOG_LEVEL",
@@ -213,6 +220,9 @@ def load_settings(
         analytics_dsn=get("analytics_dsn"),
         analytics_backend=analytics_backend,  # type: ignore[arg-type]  # validated above
         analytics_project=get("analytics_project"),
+        auth_issuer=get("auth_issuer"),
+        auth_jwks_url=get("auth_jwks_url"),
+        auth_audience=get("auth_audience") or "mini-cloud",
         hf_token=get("hf_token"),
         port=port,
         log_level=log_level,  # type: ignore[arg-type]  # validated against _VALID_LOG_LEVELS

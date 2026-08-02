@@ -17,8 +17,10 @@ from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Literal
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
+from mini_cloud.auth import Principal
+from mini_cloud.auth.fastapi import require_user
 from mini_cloud.config import load_settings
 from mini_cloud.inference import InferenceClient
 from mini_cloud.obs import get_logger
@@ -37,6 +39,7 @@ from .analytics_tour import (
     sql_reference,
     track,
 )
+from .auth_tour import SHOWCASE_APP, SHOWCASE_ROLE, auth_snapshot
 from .domain import DocumentSummary
 from .pipeline import SUMMARY_SYSTEM, submit_document
 from .resources import WORK_QUEUES, Resources, build_resources
@@ -512,6 +515,28 @@ def create_app() -> FastAPI:
         inspectable view of the query-time-identity machinery."""
         return sql_reference()
 
+    # --- identity tour: a protected endpoint + an inspectable auth-config view ------
+    # `require_user` is the whole plug-and-play line: it verifies the caller's platform JWT and
+    # enforces `grants["ref-showcase"] >= "member"`. The verifier is the process default, built
+    # lazily from MINI_AUTH_ISSUER (tests inject an offline one via mini_cloud.auth.configure).
+    require_showcase_member = require_user(app=SHOWCASE_APP, role=SHOWCASE_ROLE)
+
+    @app.get("/auth/config")
+    def auth_config() -> dict[str, object]:
+        """Is identity wired, and to which issuer/JWKS? Unprotected — nothing here is secret."""
+        return auth_snapshot(res().settings)
+
+    @app.get("/auth/whoami")
+    def whoami(user: Principal = Depends(require_showcase_member)) -> WhoAmIOut:  # noqa: B008
+        """The protected endpoint: 200 only for a valid platform JWT whose holder is at least a
+        ``member`` of ``ref-showcase``. 401 without a good token, 403 without the grant."""
+        return WhoAmIOut(
+            sub=user.sub,
+            email=user.email,
+            role=user.role_for(SHOWCASE_APP),
+            grants=user.grants,
+        )
+
     @app.get("/")
     def root() -> dict[str, str]:
         return {"app": app.title, "docs": "/docs", "metrics": "/metrics", "ui": "/ui/"}
@@ -662,6 +687,14 @@ class FunnelOut(BaseModel):
     converted: int
     overall_conversion: float
     steps: list[FunnelStepOut]
+
+
+# --- identity tour models -----------------------------------------------------------
+class WhoAmIOut(BaseModel):
+    sub: str
+    email: str | None
+    role: str | None
+    grants: dict[str, str]
 
 
 def _summary_out(s: DocumentSummary) -> SummaryOut:
