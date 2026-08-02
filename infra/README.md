@@ -83,7 +83,7 @@ make backup     # → backups/<timestamp>/{postgres-all.sql.gz, minio/}
 ./scripts/restore.sh backups/<timestamp>
 ```
 
-Schedule `scripts/backup.sh` from cron/launchd for regular snapshots.
+Schedule `scripts/backup.sh` from cron for regular snapshots.
 
 ## Binding & security
 
@@ -98,16 +98,22 @@ boundary:
 
 See `../docs/MINI_CLOUD_ARCHITECTURE.md` → *Multi-machine development*.
 
-## Supervision (always-on)
+## Supervision (through brbot-router)
 
-Register the stack with `brbot-router` as one `alwaysOn` entry so it appears on the dashboard and
-Grafana is one click away. Add to `brbot-router/projects.json` (see `brbot-router-entry.json` in
-this directory for the exact block):
+The stack runs under `brbot-router` as one **`command`-kind** entry: it appears on the dashboard
+with a Start / Stop / Restart control set (wired to `make up`/`make down`/`make restart`) and a
+one-click link to Grafana. The router controls the stack's lifecycle but does **not** parent it —
+`make up` runs `docker compose up -d`, so the containers detach and survive a router restart, and
+the router never idle-reaps or auto-starts the stack on boot. Bring it up once via the dashboard's
+Start action or `make up`.
+
+Add the entry to `brbot-router/projects.json` (see `brbot-router-entry.json` in this directory for
+the exact block, including the console `links`):
 
 ```json
-{ "name": "mini-cloud-infra", "path": "../mini-cloud/infra",
-  "command": "docker compose up", "alwaysOn": true,
-  "readinessPorts": [15432, 19000, 13000], "siteUrl": "http://localhost:13000" }
+{ "name": "mini-cloud", "kind": "command", "path": "../mini-cloud/infra", "command": "true",
+  "commands": { "start": "make up", "stop": "make down", "restart": "make restart" },
+  "healthPort": 13000, "alwaysOn": true, "siteUrl": "http://<router-host>.local:13000" }
 ```
 
 ## Pinned images

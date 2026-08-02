@@ -1,8 +1,53 @@
 {
-  "name": "mini-cloud-infra",
+  "name": "mini-cloud",
+  "domain": "infra.brettbot.ca",
+  "kind": "command",
   "path": "../mini-cloud/infra",
-  "command": "docker compose up",
+  "command": "true",
+  "port": 13000,
+  "commands": {
+    "start": "make up",
+    "stop": "make down",
+    "restart": "make restart"
+  },
+  "healthPort": 13000,
   "alwaysOn": true,
-  "readinessPorts": [15432, 19000, 13000],
-  "siteUrl": "http://localhost:13000"
+  "siteUrl": "http://<router-host>.local:13000",
+  "links": [
+    {
+      "label": "Grafana",
+      "url": "http://<router-host>.local:13000",
+      "detail": "Dashboards — one pane of glass for metrics & logs"
+    },
+    {
+      "label": "DB viewer (Adminer)",
+      "url": "http://<router-host>.local:18432",
+      "detail": "Browse & edit every project database"
+    },
+    {
+      "label": "MinIO console",
+      "url": "http://<router-host>.local:19001",
+      "detail": "Object storage — buckets per project"
+    },
+    {
+      "label": "Prometheus",
+      "url": "http://<router-host>.local:19090",
+      "detail": "Metrics scrape & query"
+    },
+    {
+      "label": "Loki",
+      "url": "http://<router-host>.local:13100",
+      "detail": "Log ingest & query"
+    },
+    {
+      "label": "Postgres",
+      "value": "<router-host>.local:15432",
+      "detail": "Database-per-project — connect via DATABASE_URL"
+    },
+    {
+      "label": "MinIO S3 API",
+      "value": "http://<router-host>.local:19000",
+      "detail": "S3 endpoint — STORAGE_ENDPOINT"
+    }
+  ]
 }

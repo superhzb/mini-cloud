@@ -1,7 +1,13 @@
 # mini-cloud infra stack. Requires Docker (Docker Desktop or colima) + docker compose.
 COMPOSE := docker compose
 
-.PHONY: help up down restart ps logs config pull backup grafana minio adminer psql project analytics-init
+# Host address the published ports bind to. Default 0.0.0.0 so the stack is
+# reachable from other machines on the LAN (e.g. a second Mac). Override to keep
+# it loopback-only: `INFRA_BIND_ADDR=127.0.0.1 make up`.
+INFRA_BIND_ADDR ?= 0.0.0.0
+export INFRA_BIND_ADDR
+
+.PHONY: help up down restart ps logs config pull backup grafana minio adminer psql project analytics-init identity-init
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -9,7 +15,9 @@ help: ## Show this help
 
 up: ## Start the whole stack (detached)
 	@test -f .env || { echo "no .env — run: cp .env.example .env"; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "docker daemon down — starting colima…"; colima start; }
 	$(COMPOSE) up -d
+	@echo "Bound on $(INFRA_BIND_ADDR) (LAN-reachable unless overridden to 127.0.0.1)"
 	@echo "Grafana → http://localhost:13000   MinIO console → http://localhost:19001   Adminer (DB) → http://localhost:18432"
 
 down: ## Stop the stack (keeps volumes/data)
@@ -63,4 +71,4 @@ adminer: ## Open Adminer DB browser (server: postgres, login from .env, then pic
 	open http://localhost:18432
 
 psql: ## psql shell into Postgres
-	$(COMPOSE) exec postgres psql -U postgres
+	$(COMPOSE) exec postgres sh -lc 'psql -U "$$POSTGRES_USER"'

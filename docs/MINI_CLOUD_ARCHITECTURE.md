@@ -104,20 +104,20 @@ motivation and a menu of opt-in targets, **not a work list this plan executes** 
                                         │
                                    cloudflared
                                         │
-   launchd ─ supervises ─▶  brbot-router  (host routing • lazy spawn • idle reap • dashboard)
-        │                       │
-        │                       ├─▶ app: fr-hub        (native process, sibling git repo)
-        │                       ├─▶ app: srt-flow      (native process)
-        │                       ├─▶ app: <new demo>    (scaffolded, auto-registered)
-        │                       └─▶ mlx-platform gateway (native, Apple-GPU, inference authority)
-        │
-        └─ supervises ─▶  mini-cloud-infra  (docker compose)
-                              ├─ postgres     (one instance, database-per-project)
-                              ├─ minio        (S3, bucket-per-project)
-                              ├─ loki         (logs)
-                              ├─ prometheus   (metrics)
-                              ├─ grafana      (dashboards, one pane of glass)
-                              └─ identity     (deferred — OIDC/JWT when needed)
+                          brbot-router  (host routing • lazy spawn • idle reap • dashboard)
+                                │
+                                ├─▶ app: fr-hub        (native process, sibling git repo)
+                                ├─▶ app: srt-flow      (native process)
+                                ├─▶ app: <new demo>    (scaffolded, auto-registered)
+                                ├─▶ mlx-platform gateway (native, Apple-GPU, inference authority)
+                                │
+                                └─▶ mini-cloud-infra   (command unit — dashboard Start/Stop → make up/down)
+                                        ├─ postgres     (one instance, database-per-project)
+                                        ├─ minio        (S3, bucket-per-project)
+                                        ├─ loki         (logs)
+                                        ├─ prometheus   (metrics)
+                                        ├─ grafana      (dashboards, one pane of glass)
+                                        └─ identity     (deferred — OIDC/JWT when needed)
 
    Every app links the SDK:  config · db · storage · inference · observability · (auth later)
         The same docker-compose stack runs on a cheap VPS when an app graduates.
@@ -125,16 +125,16 @@ motivation and a menu of opt-in targets, **not a work list this plan executes** 
 
 ### Layers
 
-- **L0 — Substrate & ingress (exists).** launchd supervises three peers independently:
-  `mini-cloud-infra` (always-on data plane, ordered first), `mlx-platform` (always-on inference),
-  and `brbot-router`. The container runtime under `mini-cloud-infra` is **Colima**, not Docker
-  Desktop: Docker Desktop's daemon starts on *user login* (GUI-gated), so a boot-time launchd unit
-  ordered before the router would fire before the daemon exists. Colima is a headless daemon
-  launchd can bring up and depend on. Same choice holds on the VPS (or the distro's native Docker
-  daemon). `brbot-router` co-supervises `cloudflared` and lazily spawns/reaps *app*
-  processes by hostname. It does **not** supervise the infra stack — infra is owned by its own
-  launchd unit so the always-on data plane is parented by the init system, not by the churny
-  control plane (see *Control plane vs. data plane*).
+- **L0 — Substrate & ingress (exists).** `brbot-router` is the single control plane: it
+  co-supervises `cloudflared`, lazily spawns/reaps *app* processes by hostname, and carries
+  `mini-cloud-infra` and `mlx-platform` as its own dashboard entries. The infra stack is a
+  **`command`-kind** router entry — the dashboard's Start/Stop/Restart run `make up`/`make down`
+  (detached `docker compose up -d`), so the router controls the stack's lifecycle without
+  *parenting* it: compose detaches, the router never idle-reaps it, and it is deliberately **not**
+  auto-started on boot (see *Control plane vs. data plane*). The container runtime under
+  `mini-cloud-infra` is **Colima**, not Docker Desktop: Colima is a headless daemon that `make up`
+  can start non-interactively (over SSH or from the dashboard's Start action) without a GUI login.
+  Same choice holds on the VPS (or the distro's native Docker daemon).
 - **L1 — Infra stack (new, docker-compose).** Postgres, MinIO, Loki, Prometheus, Grafana with
   persistent volumes and backups. Loopback-bound by default (opt-in LAN/tailnet exposure — see
   *Multi-machine development*); the *same file* runs on a VPS. **Resource-bounded:** this stack is
@@ -179,39 +179,43 @@ motivation and a menu of opt-in targets, **not a work list this plan executes** 
 
 ## Control plane vs. data plane
 
-`brbot-router` is **not** replaced by this platform — it remains the control plane and dashboard.
-It does **not** supervise the infra stack: the two layers never overlap, and making the control
-plane the *parent process* of the data plane would be exactly that overlap. The lifecycles are
-opposite (infra is always-on and must be up before any app; the router lazy-spawns and idle-reaps),
-and the dependency runs one way (apps depend on infra; the router depends on nothing in the data
-plane). Parenting the always-on data plane under the churny control plane would let a router
-redeploy or crash cycle Postgres/MinIO underneath live apps.
+`brbot-router` is **not** replaced by this platform — it remains the control plane and dashboard,
+and it now also fronts the infra stack. The router controls the stack's **lifecycle** (a Start /
+Stop / Restart button on the dashboard) without becoming its **parent process** — the distinction
+that matters. The lifecycles are opposite (infra is always-on and must be up before any app; the
+router lazy-spawns and idle-reaps app processes per request), and the dependency runs one way (apps
+depend on infra; the router depends on nothing in the data plane). If the always-on data plane were
+parented by the churny control plane, a router redeploy or crash could cycle Postgres/MinIO
+underneath live apps — so it must not be.
 
 | | `brbot-router` (control plane) | infra stack (data plane) |
 |---|---|---|
 | Manages | app **processes** — start/stop/route/idle-reap, git-pull redeploy, dashboard, SSE status | stateful **services** — Postgres, MinIO, Grafana… |
-| Lifecycle | lazy-spawn per request | always-on |
-| Supervised by | launchd | **its own launchd unit** (ordered before the router) |
+| Lifecycle | lazy-spawn per request | always-on (started once, runs until stopped) |
+| Run as | child processes of the router | detached `docker compose` containers — **not** router children |
 
-So **supervision and observation are separated**:
+The `command`-kind `projects.json` entry gives exactly this split. The router runs the entry's
+`commands.start`/`commands.stop` (`make up`/`make down`) on demand from the dashboard, but:
 
-- **Supervision** — a dedicated launchd unit owns `mini-cloud-infra` (`docker compose up`),
-  always-on, ordered ahead of `brbot-router`. The router never runs the compose command.
-- **Observation** — `brbot-router` still shows infra as a **read-only / unmanaged** dashboard row:
-  a health probe plus a `siteUrl` deep-link to Grafana, but **no `command`, no spawn, no
-  idle-reap** — exactly as `mlx-platform`'s row deep-links to its `/console` today.
-
-This needs a third `projects.json` entry kind — `external` (probe-only) — distinct from the
-lazy-spawn app entries and any `alwaysOn` command entry:
+- **Not parented** — `make up` runs `docker compose up -d`, so the containers detach and outlive
+  the router. A router restart or crash leaves Postgres/MinIO/Grafana running.
+- **Not idle-reaped, not auto-started on boot** — a `command` unit is never lazy-spawned,
+  readiness-probed as a child, or reaped; even with `alwaysOn` set the router does **not** launch
+  it at startup (so bringing the router up never triggers heavy tooling like Docker). Infra is
+  brought up explicitly, once, via the dashboard Start action or `make up`.
+- **Observed** — the router probes `healthPort` (Grafana's `13000`) and shows the stack as
+  running/stopped, with `siteUrl` + `links` deep-linking to Grafana, Adminer, and the MinIO
+  console — exactly as `mlx-platform`'s row deep-links to its `/console`.
 
 ```json
-{ "name": "mini-cloud-infra", "kind": "external",
-  "readinessPorts": [15432, 19000, 13000], "siteUrl": "http://localhost:13000" }
+{ "name": "mini-cloud", "kind": "command", "path": "../mini-cloud/infra", "command": "true",
+  "commands": { "start": "make up", "stop": "make down", "restart": "make restart" },
+  "healthPort": 13000, "alwaysOn": true, "siteUrl": "http://<router-host>.local:13000" }
 ```
 
-This `external` (observe-but-don't-own) entry is the same primitive as the **remote-upstream route
-type** planned for Phase 4.5 (no spawn, no idle-reap) — it arrives one phase early here, so treat it
-as one shared concept rather than two.
+The `command` kind (observe-and-control, but don't own the process) is a sibling of the
+**remote-upstream route type** from Phase 4.5 (no spawn, no idle-reap) — both are "the router
+routes/controls but doesn't parent" entries; treat them as one shared idea rather than three.
 
 ## Decoupling model
 
@@ -243,7 +247,7 @@ Do **not** reshuffle the existing repos.
 
 ```text
 /Users/brett-m1/Documents/GitHub/
-├── brbot-router/          ← unchanged (control plane / dashboard)
+├── brbot-router/          ← control plane / dashboard (extended: route API + infra command entry)
 ├── mlx-platform/          ← unchanged (inference service, own repo)
 ├── mini-cloud/              ← NEW (one repo, workspace)
 │   ├── infra/             # docker-compose.yml + per-service config, backup script
@@ -410,9 +414,10 @@ workflow, and the scorecard (below).
   `MINI_INFERENCE_URL`, `DATABASE_URL`, `STORAGE_ENDPOINT`) and end the 8933/9000/5900 split.
 - Shared base tooling config (ruff/pyright/pytest) referenced by every `pyproject.toml`.
 - **Define the seven-metric scorecard** (above) as the written readiness standard.
-- **Pick the container runtime: Colima** (headless, launchd-supervisable — not Docker Desktop,
-  whose daemon is GUI/login-gated and cannot be ordered before `brbot-router` at boot). This is a
-  Phase-0 choice because launchd ordering and the always-on data plane depend on it.
+- **Pick the container runtime: Colima** (headless — not Docker Desktop, whose daemon is
+  GUI/login-gated). Colima's daemon can be started non-interactively by `make up` (over SSH or from
+  the router dashboard's Start action) without a GUI login. This is a Phase-0 choice because the
+  always-on data plane depends on a runtime that comes up without a desktop session.
 - Create the `mini-cloud/` repo holding this doc, the compose stack, the SDK, and the scaffolder.
 
 *Done when:* one documented naming/port standard and the scorecard definition exist, the container
@@ -421,10 +426,10 @@ runtime is Colima, and the base config is consumed by at least the in-repo refer
 ### Phase 1 — Infra stack up (docker-compose)
 
 - Postgres, MinIO, Loki, Prometheus, Grafana in one compose file, persistent volumes, a backup
-  job, supervised as always-on by a **dedicated launchd unit** (ordered before `brbot-router`) —
-  not by the router. The unit brings up **Colima** first, then `docker compose up`, so the daemon
-  exists before the stack starts. `brbot-router` observes it via a read-only `external` dashboard
-  row (see *Control plane vs. data plane*).
+  job. Registered in `brbot-router` as a **`command`-kind** entry whose Start action runs `make up`
+  — which brings up **Colima** first, then `docker compose up -d`, so the daemon exists before the
+  stack starts and the containers detach rather than becoming router children (see *Control plane
+  vs. data plane*).
 - Grafana provisioned with Loki + Prometheus datasources; MinIO console reachable; Postgres on
   loopback.
 - **Bounded retention (mandatory, not backlog).** Loki and Prometheus are unbounded by default and

@@ -77,8 +77,9 @@ underneath a contract.
   deploys on its own and talks to others only over contracts.
 - **Version independence:** SDK packages are versioned independently and pinned; App A can stay on
   `db@0.4` while App B moves to `db@0.5`.
-- The infra stack is a **new always-on dependency**. It registers as one `alwaysOn` entry in
-  `brbot-router/projects.json` (`mini-cloud-infra`) and requires a container engine (Docker/colima)
+- The infra stack is a **new always-on dependency**. It registers as one `command`-kind entry in
+  `brbot-router/projects.json` (`mini-cloud`) — the router controls its lifecycle via
+  `make up`/`make down` but does not parent it — and requires a container engine (Docker/colima)
   on the host — a new prerequisite this machine must install.
 - MLX inference stays **native and Mac-only** (Apple-GPU cannot run in Linux containers); apps reach
   it over HTTP and flip one env var to a cloud provider on graduation.
