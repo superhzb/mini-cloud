@@ -39,6 +39,16 @@ SDK package (Phase 2) loads exactly these keys.
 | `MINI_ROUTER_API_TOKEN` | Scaffolder's copy of `ROUTE_REGISTRATION_TOKEN`. When unset (and none in the router's `.env`), `mini new` writes `projects.json` directly. | — |
 | `MINI_ROUTER_API_HOST` | `Host` header the scaffolder sends to the route API (the router's `DASHBOARD_DOMAIN`, since the API is scoped to that host). | `dashboard.brettbot.ca` |
 
+Identity-service-only configuration (never copied into consuming apps):
+
+| Env var | Meaning | Local default |
+|---|---|---|
+| `IDENTITY_DATABASE_URL` | Private DSN for the identity service's own store | `postgresql://identity:…@127.0.0.1:15432/identity` |
+| `MINI_AUTH_SIGNING_KEY_FILE` | Stable ES256/RS256 private key path; gitignored | `.identity-signing-key.pem` |
+| `MINI_AUTH_PASSWORD_LOGIN` | Enable LAN-only basic login and seed the developer admin | `1` |
+| `MINI_AUTH_ADMIN_USER` / `_PASSWORD` | Developer super-admin login | `admin` / `admin` |
+| `GOOGLE_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | Google OAuth client configuration | — |
+
 Deprecated names and their canonical replacement (migrate on next touch):
 
 | Old | Canonical |

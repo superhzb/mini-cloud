@@ -2,6 +2,7 @@
 .env
 infra/.env
 **/.env.local
+**/.identity-signing-key.pem
 
 # Python
 __pycache__/

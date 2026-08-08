@@ -1,4 +1,4 @@
-"""The authorization store: ``users`` (profile cache) + ``grants`` (per-app roles) + the dev-only
+"""The authorization store: ``users`` (profile cache) + ``grants`` (per-app roles) + the developer
 ``dev_users`` (username/password) table.
 
 Two implementations behind one :class:`GrantsStore` protocol:
@@ -26,7 +26,9 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class DevUser:
-    """A dev-only login account. Maps a username to an ``email`` (whose grants become the token's).
+    """A developer login account.
+
+    Maps a username to an ``email`` whose grants become the token's.
     """
 
     username: str

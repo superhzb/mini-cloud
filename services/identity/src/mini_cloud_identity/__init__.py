@@ -14,13 +14,10 @@ Design decisions live in ``docs/identity-plan.md``. The load-bearing ones:
 
 - **Platform-wide identity, per-app authZ.** One token, a fixed ``aud: "mini-cloud"``; *who may use
   which app* is the ``grants`` claim (``{app: role}``), never ``aud``.
-- **Thin.** No password auth for real users, no server-side session store — Google is the session
-  authority and access tokens are short-lived. The only state we own is *authorization* (the
-  ``grants``/``users`` tables), not *authentication*.
-- **One deliberate dev exception:** a local-only ``POST /dev/token`` password grant (and a seeded
-  ``admin/admin``) that mints the *same* token so tests/CI/`curl` can get a JWT without a browser.
-  It **fails closed** — the service refuses to boot with it enabled on anything that doesn't look
-  like local dev (see :mod:`mini_cloud_identity.devlogin`).
+- **Two login methods, one contract.** Google OAuth and LAN-only username/password login both mint
+  the same short-lived JWT. There is no server-side session store.
+- **Safe developer default:** ``admin/admin`` receives a platform-wide grant in local development;
+  public Host headers are rejected and non-dev startup fails closed.
 """
 
 from __future__ import annotations

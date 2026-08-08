@@ -38,7 +38,7 @@ mini-cloud/
 | 4.5 | Remote route registration (touches brbot-router) | ✅ done |
 | — | Analytics SDK (`mini-cloud-analytics`) + funnel/retention + Grafana | ✅ done |
 | 5 | TS SDK + frontend template (`vite`/`node` templates still skeletons) | ▫️ not started |
-| 6 | Identity — auth SDK (`mini-cloud-auth`) + ref-showcase proof + `identity` DB/infra | 🚧 partial (identity service + gateway trust external/pending) |
+| 6 | Identity — password + Google login, auth SDK, DB, JWKS, router + ref-showcase | 🚧 service live; Google callback allowlist + gateway trust pending |
 | 7 | Graduation playbook | ▫️ not started |
 
 ### Try it (no infra needed)

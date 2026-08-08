@@ -127,6 +127,8 @@ class GoogleOAuth:
             raise GoogleAuthError(f"invalid Google id_token: {exc}") from exc
         if claims.get("iss") not in _ISSUERS:
             raise GoogleAuthError(f"unexpected id_token issuer {claims.get('iss')!r}")
+        if claims.get("email_verified") is not True:
+            raise GoogleAuthError("Google account email is not verified")
         return GoogleIdentity(
             sub=str(claims["sub"]),
             email=claims.get("email"),

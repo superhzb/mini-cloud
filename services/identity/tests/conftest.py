@@ -44,7 +44,7 @@ def build_client(*, store: InMemoryStore | None = None, **overrides: object) -> 
     settings = replace(LOCAL_SETTINGS, **overrides)  # type: ignore[arg-type]
     signing = load_signing_key(pem=None, kid=settings.signing_kid, algorithm="ES256")
     app = create_app(settings, store=store or InMemoryStore(), signing=signing)
-    return TestClient(app)
+    return TestClient(app, base_url="http://127.0.0.1")
 
 
 @pytest.fixture

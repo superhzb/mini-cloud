@@ -21,7 +21,7 @@ _DEFAULT_TTL = 900  # 15 min access token (decision 2: short-lived, no session s
 
 @dataclass(frozen=True, slots=True)
 class IdentitySettings:
-    """All the identity service needs to boot, mint, and (optionally) run Google + dev login."""
+    """All the identity service needs to boot, mint, and run Google + password login."""
 
     issuer: str
     audience: str
@@ -38,14 +38,15 @@ class IdentitySettings:
     # authorization store (Postgres when set; in-memory dev fallback when not)
     database_url: str | None
 
-    # Google OAuth (absent → the /login flow 503s, but dev login still works)
+    # Google OAuth (absent → the /login flow 503s, but password login still works)
     google_client_id: str | None
     google_client_secret: str | None
     google_redirect_uri: str | None
     state_secret: str | None
     post_login_redirect: str | None
 
-    # dev login
+    # Password login. The seeded admin is a developer convenience and remains fail-closed
+    # outside local development unless the operator explicitly forces it.
     dev_login_enabled: bool
     dev_login_force: bool
     dev_admin_user: str
@@ -77,10 +78,20 @@ class IdentitySettings:
             ),
             state_secret=_opt(env, "MINI_AUTH_STATE_SECRET"),
             post_login_redirect=_opt(env, "MINI_AUTH_POST_LOGIN_REDIRECT"),
-            dev_login_enabled=_bool(env, "MINI_AUTH_DEV_LOGIN", default=True),
+            dev_login_enabled=_bool_alias(
+                env, "MINI_AUTH_PASSWORD_LOGIN", "MINI_AUTH_DEV_LOGIN", default=True
+            ),
             dev_login_force=_bool(env, "MINI_AUTH_DEV_LOGIN_FORCE", default=False),
-            dev_admin_user=_opt(env, "MINI_AUTH_DEV_ADMIN_USER") or "admin",
-            dev_admin_password=_opt(env, "MINI_AUTH_DEV_ADMIN_PASSWORD") or "admin",
+            dev_admin_user=(
+                _opt(env, "MINI_AUTH_ADMIN_USER")
+                or _opt(env, "MINI_AUTH_DEV_ADMIN_USER")
+                or "admin"
+            ),
+            dev_admin_password=(
+                _opt(env, "MINI_AUTH_ADMIN_PASSWORD")
+                or _opt(env, "MINI_AUTH_DEV_ADMIN_PASSWORD")
+                or "admin"
+            ),
         )
 
 
@@ -110,3 +121,10 @@ def _bool(env: dict[str, str], key: str, *, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _bool_alias(env: dict[str, str], key: str, legacy_key: str, *, default: bool) -> bool:
+    """Read the public name first, retaining the old dev-login name for compatibility."""
+    if _opt(env, key) is not None:
+        return _bool(env, key, default=default)
+    return _bool(env, legacy_key, default=default)

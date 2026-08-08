@@ -1,4 +1,10 @@
-# Plan: `mini-cloud-identity` — thin platform identity (Google OAuth → JWT)
+# Plan: `mini-cloud-identity` — password + Google OAuth → platform JWT
+
+> **Implementation status (2026-08-08):** the identity DB, persistent ES256 signing key, LAN-only
+> password login, Google OAuth/PKCE flow, JWKS, router entry, SDK verifier, and reference proof are
+> implemented. The copied Google OAuth client still needs
+> `https://identity.brettbot.ca/callback` added to its Authorized redirect URIs in Google Cloud;
+> Google currently returns `redirect_uri_mismatch` until that external setting is changed.
 
 Phase 6, promoted from *deferred* to *building now*. The reasoning: every app demo needs basic
 auth, and we don't want each one reinventing login — a Supabase-style plug-and-play seam owned by
@@ -7,12 +13,9 @@ the shape of [`analytics-plan.md`](analytics-plan.md).
 
 ## Scope (decided)
 
-1. **Thin IdP, not full.** Google OAuth → JWT minting only. No self-hosted password auth, no
-   session store. Google is the login authority; we mint a short-lived platform JWT after Google
-   verifies the human. Follows the existing `srt-flow/pkg-auth` pattern. **One deliberate,
-   local-first exception:** a username/password grant for quick testing (see *Quick-test login*) that
-   mints the *same* JWT and is **on by default in local dev** (with a seeded default admin) — flipped
-   off on graduation, so it's never a login path for real users in production.
+1. **Two login methods, one token contract.** Google OAuth follows the existing
+   `srt-flow/pkg-auth` pattern. Basic username/password login supports local development and mints
+   the exact same short-lived platform JWT. There is no server-side session store.
 2. **Platform-wide identity.** One shared account/JWT system for the whole mini-cloud, with
    **per-app authorization claims** carried in the token — not a separate auth stack per app.
 3. **Gateway trust deferred.** Ship the SDK helper + identity service + a reference-app proof
@@ -100,16 +103,16 @@ Small FastAPI (or node) service; endpoints:
   repo), `MINI_AUTH_ISSUER` (its own public URL). Registers via `POST /routes` as
   `identity.brettbot.ca`.
 
-### Piece 2b — quick-test login (dev-only username/password → JWT)
+### Piece 2b — basic username/password login (LAN-only developer service → JWT)
 
 Google OAuth needs a browser, a real Google account, and client secrets — too heavy for unit tests,
-CI, `curl`, and fast local iteration. So the service also exposes a **dev-only password grant** that
+CI, `curl`, and fast local iteration. So the service also exposes a **LAN-only password login** that
 mints the *same* platform JWT. The point is to exercise the identical verify path with a token
 obtained in one HTTP call; only the pre-mint human-check differs.
 
-- **On by default in local dev; disabled on graduation.** `MINI_AUTH_DEV_LOGIN` defaults to **`1`**
+- **On by default in local dev; disabled on graduation.** `MINI_AUTH_PASSWORD_LOGIN` defaults to **`1`**
   (enabled) — local-first, so a fresh clone can log in and grab a JWT with zero setup, matching the
-  platform's "dev-default creds on a trusted LAN" stance. Set `MINI_AUTH_DEV_LOGIN=0` on any
+  platform's "dev-default creds on a trusted LAN" stance. Set `MINI_AUTH_PASSWORD_LOGIN=0` on any
   graduated/VPS deployment; with it off the endpoint returns `404`/`503` and real users can only come
   through Google. (This is the inverse of the router's off-by-default token — the trade favors local
   convenience because the whole box is a single-user trusted machine.)
@@ -119,15 +122,15 @@ obtained in one HTTP call; only the pre-mint human-check differs.
   "*", "admin")` row using a `"*"` wildcard app. This needs a one-line extension to the SDK grant
   check (decision 3): `require_user(app=X)` reads `grants.get(X)` **then falls back to
   `grants.get("*")`**, so a platform admin needn't be granted per app. Override the defaults via
-  `MINI_AUTH_DEV_ADMIN_USER` / `MINI_AUTH_DEV_ADMIN_PASSWORD` if desired.
-- **Endpoint** `POST /dev/token` — body `{ "username": "...", "password": "..." }` →
+  `MINI_AUTH_ADMIN_USER` / `MINI_AUTH_ADMIN_PASSWORD` if desired.
+- **Endpoint** `POST /login/password` (`POST /dev/token` remains a compatibility alias) — body
+  `{ "username": "...", "password": "..." }` →
   `{ "access_token": "<JWT>", "token_type": "bearer", "expires_in": <sec> }`. Same signing key,
   `kid`, `iss`, `aud: "mini-cloud"`, and TTL as the Google path — **indistinguishable to every
   verifier**, so apps stay single-path (the only SDK touch is the `"*"` fallback above).
-- **Dev user store, kept separate from the thin model.** A small `dev_users(username, email,
-  password_hash)` table (hashes via argon2/bcrypt — never plaintext), created **only when dev login
-  is enabled** so it never ships in a graduated schema and doesn't touch the passwordless `users`/
-  `grants` design. Each dev user maps to an **email**; per-app grants still come from the same
+- **Developer user store, kept separate.** A small `dev_users(username, email, password_hash)`
+  table (salted PBKDF2 hashes—never plaintext) ships in the service-owned schema. Each user maps to
+  an **email**; per-app grants still come from the same
   `grants` table (the seeded admin uses the `"*"` wildcard). Add more testers with
   `mini grant`/direct rows as needed.
 - **Same mint path.** After the password check the service reads `grants WHERE email = ?`, folds the
@@ -161,9 +164,9 @@ Service-side only (the identity service, not app verifiers):
 
 | Env var | Meaning | Example |
 |---|---|---|
-| `MINI_AUTH_DEV_LOGIN` | Enables the `POST /dev/token` password grant + seeds `dev_users` and the default admin. **On by default (`1`)** in local dev; set `0` on a graduated deployment (see *Quick-test login*) | `1` |
-| `MINI_AUTH_DEV_ADMIN_USER` | Default admin username seeded when dev login is on. Optional — defaults to `admin` (email `admin@local`, platform-wide `"*"` admin grant) | `admin` |
-| `MINI_AUTH_DEV_ADMIN_PASSWORD` | Default admin password. Optional — defaults to `admin` | `admin` |
+| `MINI_AUTH_PASSWORD_LOGIN` | Enables the LAN-only password login + seeds `dev_users` and the default admin. On by default in local dev; set `0` on graduation | `1` |
+| `MINI_AUTH_ADMIN_USER` | Default developer admin username; its `admin@local` identity receives the platform-wide `"*"` admin grant | `admin` |
+| `MINI_AUTH_ADMIN_PASSWORD` | Default developer admin password | `admin` |
 
 Proposed **port `19210`** for the identity service — a free slot in the `19201–19299` API band,
 just past `mlx-platform` (`19207`). (`env-and-ports.md` groups platform services in a table but
@@ -178,10 +181,8 @@ provisioned `identity` Postgres database** (like `analytics`) — not a static f
 
 - **One `grants` table** — `(email, app, role)`, unique on `(email, app)` — plus an optional
   `users` profile cache populated from Google's `id_token` (`sub`, `email`, `name`, `picture`).
-  This is the whole schema; there is no password column and no session/token table.
-- Still **thin** in the decided sense: **no passwords, no server-side sessions** — Google remains
-  the login authority, and access is short-lived JWT. The DB holds *authorization* (who may enter
-  which app, at what role), not *authentication* state.
+  `users` profile cache and a separate `dev_users` table containing salted password hashes. There
+  is no session/token table; both methods mint short-lived JWTs.
 - **Provisioning & schema ownership:** infra owns the Postgres instance, so `make -C infra
   identity-init` creates the `identity` DB **and a writer role for the service** — but stops there.
   The **schema/migrations belong to the identity service** (`services/identity/`; decision 5 — it's
@@ -206,7 +207,8 @@ only ever see the JWT and `require_user`.
 1. `packages/auth` SDK + offline tests (test keypair) — self-contained.
 2. `services/identity/` in-repo service: `make -C infra identity-init` (DB + writer role), the
    service owns/applies its schema on boot, then Google OAuth + JWKS + mint reading the `grants` table.
-   Add the dev-only `POST /dev/token` password grant + `dev_users` seed behind `MINI_AUTH_DEV_LOGIN`
+   Add the LAN-only `POST /login/password` login + `dev_users` seed behind
+   `MINI_AUTH_PASSWORD_LOGIN`
    in the same step, so tests/CI can obtain a JWT without a browser from day one.
 3. Wire the reference app + live end-to-end proof; adoption-guide section.
 4. **(deferred / Phase 6b)** coordinate `mlx-platform` to trust the JWT and retire

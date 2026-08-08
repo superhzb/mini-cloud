@@ -10,7 +10,13 @@ from fastapi.testclient import TestClient
 from mini_cloud.auth import TokenVerifier, check_grant
 
 from mini_cloud_identity.config import IdentitySettings
-from mini_cloud_identity.devlogin import IdentityConfigError, _looks_local, resolve_dev_login
+from mini_cloud_identity.devlogin import (
+    IdentityConfigError,
+    _looks_local,
+    password_request_is_local,
+    resolve_dev_login,
+)
+from mini_cloud_identity.google import GoogleIdentity, GoogleOAuth
 from mini_cloud_identity.keys import load_signing_key
 from mini_cloud_identity.passwords import hash_password, verify_password
 from mini_cloud_identity.store import InMemoryStore
@@ -29,18 +35,26 @@ def test_password_roundtrip_and_rejects_wrong() -> None:
 def test_resolve_dev_login_local_is_allowed() -> None:
     assert resolve_dev_login(enabled=True, issuer="http://127.0.0.1:19210", app_env="dev") is True
     assert resolve_dev_login(enabled=True, issuer=None, app_env="dev") is True
-    assert resolve_dev_login(enabled=False, issuer="https://identity.brettbot.ca", app_env="prod") is False
+    assert (
+        resolve_dev_login(enabled=False, issuer="https://identity.brettbot.ca", app_env="prod")
+        is False
+    )
 
 
-def test_resolve_dev_login_refuses_to_boot_when_remote() -> None:
-    with pytest.raises(IdentityConfigError):
+def test_resolve_dev_login_refuses_to_boot_outside_dev() -> None:
+    assert (
         resolve_dev_login(enabled=True, issuer="https://identity.brettbot.ca", app_env="dev")
+        is True
+    )
     with pytest.raises(IdentityConfigError):
         resolve_dev_login(enabled=True, issuer="http://127.0.0.1:19210", app_env="prod")
     # …unless deliberately forced.
-    assert resolve_dev_login(
-        enabled=True, issuer="https://identity.brettbot.ca", app_env="prod", force=True
-    ) is True
+    assert (
+        resolve_dev_login(
+            enabled=True, issuer="https://identity.brettbot.ca", app_env="prod", force=True
+        )
+        is True
+    )
 
 
 def test_looks_local() -> None:
@@ -50,9 +64,25 @@ def test_looks_local() -> None:
     assert _looks_local("https://identity.brettbot.ca") is False
 
 
-def test_app_refuses_to_boot_with_remote_dev_login() -> None:
+def test_password_request_is_lan_only() -> None:
+    assert password_request_is_local("127.0.0.1") is True
+    assert password_request_is_local("192.168.0.12") is True
+    assert password_request_is_local("mini.local") is True
+    assert password_request_is_local("identity.brettbot.ca") is False
+
+
+def test_app_refuses_to_boot_with_password_login_in_prod() -> None:
     with pytest.raises(IdentityConfigError):
         build_client(issuer="https://identity.brettbot.ca", app_env="prod")
+
+
+def test_password_login_rejects_public_host(client: TestClient) -> None:
+    response = client.post(
+        "/login/password",
+        json={"username": "admin", "password": "admin"},
+        headers={"host": "identity.brettbot.ca"},
+    )
+    assert response.status_code == 403
 
 
 # --- JWKS + dev grant + mint path -------------------------------------------------------
@@ -66,7 +96,7 @@ def test_jwks_publishes_one_signing_key(client: TestClient) -> None:
 
 
 def test_dev_token_mints_admin_and_userinfo_reads_it(client: TestClient) -> None:
-    resp = client.post("/dev/token", json={"username": "admin", "password": "admin"})
+    resp = client.post("/login/password", json={"username": "admin", "password": "admin"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["token_type"] == "bearer"
@@ -80,13 +110,35 @@ def test_dev_token_mints_admin_and_userinfo_reads_it(client: TestClient) -> None
 
 
 def test_dev_token_rejects_wrong_password(client: TestClient) -> None:
-    assert client.post("/dev/token", json={"username": "admin", "password": "x"}).status_code == 401
-    assert client.post("/dev/token", json={"username": "ghost", "password": "admin"}).status_code == 401
+    assert (
+        client.post("/login/password", json={"username": "admin", "password": "x"}).status_code
+        == 401
+    )
+    assert (
+        client.post("/login/password", json={"username": "ghost", "password": "admin"}).status_code
+        == 401
+    )
+
+
+def test_legacy_dev_token_alias_still_works(client: TestClient) -> None:
+    assert (
+        client.post("/dev/token", json={"username": "admin", "password": "admin"}).status_code
+        == 200
+    )
 
 
 def test_dev_token_404_when_disabled() -> None:
     disabled = build_client(dev_login_enabled=False)
-    assert disabled.post("/dev/token", json={"username": "admin", "password": "admin"}).status_code == 404
+    assert (
+        disabled.post(
+            "/login/password", json={"username": "admin", "password": "admin"}
+        ).status_code
+        == 404
+    )
+    assert (
+        disabled.post("/dev/token", json={"username": "admin", "password": "admin"}).status_code
+        == 404
+    )
     # …and with dev login off, nothing is seeded, so there is no admin to log in as anyway.
 
 
@@ -139,12 +191,64 @@ def test_login_503_without_google(client: TestClient) -> None:
     assert client.get("/login", follow_redirects=False).status_code == 503
 
 
+def test_google_login_and_callback_use_the_shared_mint_path(
+    store: InMemoryStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store.set_grant(email="person@example.test", app="demo", role="member")
+    client = build_client(
+        store=store,
+        google_client_id="client-id",
+        google_client_secret="client-secret",
+        google_redirect_uri="https://identity.example.test/callback",
+        state_secret="test-state-secret-with-at-least-32-bytes",
+    )
+
+    login = client.get("/login", follow_redirects=False)
+    assert login.status_code == 307
+    assert login.headers["location"].startswith("https://accounts.google.com/")
+
+    monkeypatch.setattr(
+        GoogleOAuth,
+        "exchange",
+        lambda self, **kwargs: GoogleIdentity(  # noqa: ARG005
+            sub="google-sub",
+            email="person@example.test",
+            name="Person",
+            picture=None,
+        ),
+    )
+    callback = client.get("/callback?code=code&state=state")
+    assert callback.status_code == 200
+    token = callback.json()["access_token"]
+    info = client.get("/userinfo", headers={"authorization": f"Bearer {token}"})
+    assert info.json() == {
+        "sub": "google-sub",
+        "email": "person@example.test",
+        "grants": {"demo": "member"},
+    }
+
+
 def test_settings_from_env_defaults() -> None:
     cfg = IdentitySettings.from_env({"APP_NAME": "x"})
     assert cfg.port == 19210
     assert cfg.audience == "mini-cloud"
     assert cfg.issuer == "http://127.0.0.1:19210"
     assert cfg.dev_login_enabled is True  # on by default in local dev
+
+
+def test_password_login_config_names_override_legacy_names() -> None:
+    cfg = IdentitySettings.from_env(
+        {
+            "APP_NAME": "x",
+            "MINI_AUTH_PASSWORD_LOGIN": "0",
+            "MINI_AUTH_DEV_LOGIN": "1",
+            "MINI_AUTH_ADMIN_USER": "root",
+            "MINI_AUTH_ADMIN_PASSWORD": "secret",
+        }
+    )
+    assert cfg.dev_login_enabled is False
+    assert cfg.dev_admin_user == "root"
+    assert cfg.dev_admin_password == "secret"
 
 
 def test_mounted_key_is_not_ephemeral() -> None:

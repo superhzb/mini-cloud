@@ -1,9 +1,8 @@
-"""Password hashing for the **dev-only** account store.
+"""Password hashing for the local developer account store.
 
 Deliberately dependency-free: stdlib PBKDF2-HMAC-SHA256, salted per password, compared in constant
-time. These accounts only ever exist when dev login is enabled (never in a graduated schema), so the
-bar is "never store plaintext, never leak via timing" — not "resist an offline crack of a production
-secret". A mounted-key production deployment has no passwords at all (Google is the only login).
+time. The default account is LAN-only and disabled on graduation; hashes still persist in the
+identity schema so toggling the login method does not recreate authentication state.
 """
 
 from __future__ import annotations

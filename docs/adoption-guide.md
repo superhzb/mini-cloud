@@ -86,18 +86,19 @@ in the identity service's `identity` DB (`make -C ../mini-cloud/infra identity-i
 your app is storage-agnostic — it only ever sees the JWT. Test offline with a fixture keypair and
 `TokenVerifier.from_jwks_set` — see `examples/ref-showcase/tests/test_auth_tour_unit.py`.
 
-**Get a real token without a browser (local dev).** The identity service exposes a dev-only password
-grant, on by default locally and seeded with an `admin`/`admin` platform admin (a `"*"` grant that
+**Get a real token without a browser (local dev).** The identity service exposes a LAN-only password
+login, on by default locally and seeded with an `admin`/`admin` platform admin (a `"*"` grant that
 authorizes every app). It mints the *same* JWT as the Google path, so it's what feeds `curl` and
 `MINI_AUTH_TEST_TOKEN` in live tests:
 
 ```bash
-curl -s localhost:19210/dev/token -d '{"username":"admin","password":"admin"}' \
+curl -s http://<identity-host>.local:19210/login/password \
+     -d '{"username":"admin","password":"admin"}' \
      -H 'content-type: application/json' | jq -r .access_token
 ```
 
-It **fails closed** — the service refuses to boot with it enabled on a non-local deployment, so it's
-never a login path in production (`MINI_AUTH_DEV_LOGIN=0` on graduation). The gateway-trust step
+It **fails closed** outside `APP_ENV=dev` and rejects public Host headers, so the public OAuth route
+cannot expose the default password. Disable it with `MINI_AUTH_PASSWORD_LOGIN=0` on graduation. The gateway-trust step
 (retiring `X-MLX-Project`-as-auth) is deferred; see `docs/identity-plan.md`.
 
 Provision the repo's DB + bucket once (if not already): `make -C ../mini-cloud/infra project

@@ -20,7 +20,12 @@ from mini_cloud.obs import get_logger
 from pydantic import BaseModel
 
 from .config import IdentitySettings
-from .devlogin import DEV_USERS_DDL, DevAdmin, resolve_dev_login, seed_dev_admin
+from .devlogin import (
+    DevAdmin,
+    password_request_is_local,
+    resolve_dev_login,
+    seed_dev_admin,
+)
 from .google import GoogleAuthError, GoogleOAuth
 from .keys import SigningKey, load_signing_key
 from .store import GrantsStore, InMemoryStore, PostgresStore
@@ -47,7 +52,7 @@ def create_app(
     """Build the identity service. See module docstring for the boot sequence."""
     cfg = settings or IdentitySettings.from_env()
 
-    # Fail closed FIRST: refuse to boot if dev login is enabled on a non-local deployment.
+    # Fail closed FIRST: refuse to boot with the developer password login outside APP_ENV=dev.
     dev_login = resolve_dev_login(
         enabled=cfg.dev_login_enabled,
         issuer=cfg.issuer,
@@ -70,23 +75,17 @@ def create_app(
         store, pool = _open_store(cfg)
 
     if dev_login:
-        if pool is not None:
-            from mini_cloud.db import acquire
-
-            with acquire(pool) as conn:
-                conn.execute(DEV_USERS_DDL)  # dev-only table, never in the versioned schema
         seed_dev_admin(
             store, DevAdmin(username=cfg.dev_admin_user, password=cfg.dev_admin_password)
         )
         _log.warning(
-            "DEV LOGIN ENABLED — POST /dev/token mints platform tokens; %r/**** is a platform "
-            "admin. Never enable this on a graduated deployment (MINI_AUTH_DEV_LOGIN=0).",
+            "PASSWORD LOGIN ENABLED — POST /login/password mints platform tokens on local "
+            "network hosts; %r/**** is a platform admin. Disable with "
+            "MINI_AUTH_PASSWORD_LOGIN=0 when no longer needed.",
             cfg.dev_admin_user,
         )
 
-    verifier = TokenVerifier.from_jwks_set(
-        signing.jwks(), issuer=cfg.issuer, audience=cfg.audience
-    )
+    verifier = TokenVerifier.from_jwks_set(signing.jwks(), issuer=cfg.issuer, audience=cfg.audience)
     google = _build_google(cfg)
 
     app = FastAPI(title="mini-cloud-identity", version="0.1.0")
@@ -100,7 +99,7 @@ def create_app(
     def mint_for(
         *, email: str, sub: str, name: str | None = None, picture: str | None = None
     ) -> str:
-        """The one mint path: cache the profile, read grants, sign. Shared by Google + dev login."""
+        """The one mint path: cache profile, read grants, sign. Shared by both login methods."""
         store.upsert_user(sub=sub, email=email, name=name, picture=picture)
         grants = store.grants_for(email)
         return mint_access_token(
@@ -187,11 +186,16 @@ def create_app(
         principal = _require_bearer(request, verifier)
         return {"sub": principal.sub, "email": principal.email, "grants": principal.grants}
 
-    # --- dev-only password grant (mints the SAME token) -----------------------------
-    @app.post("/dev/token")
-    def dev_token(body: DevTokenIn) -> JSONResponse:
+    # --- username/password login (mints the SAME token as Google) --------------------
+    def password_token(body: DevTokenIn, request: Request) -> JSONResponse:
         if not dev_login:
-            raise HTTPException(404, "dev login is disabled")
+            raise HTTPException(404, "password login is disabled")
+        forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+        request_host = forwarded_host or request.url.hostname
+        if not password_request_is_local(request_host):
+            raise HTTPException(
+                403, "developer password login is available on the local network only"
+            )
         from .passwords import verify_password
 
         user = store.get_dev_user(body.username)
@@ -200,14 +204,21 @@ def create_app(
         token = mint_for(email=user.email, sub=f"dev|{user.username}")
         return JSONResponse(_token_body(token, cfg.access_ttl))
 
+    app.post("/login/password", name="password_login")(password_token)
+    # Backwards-compatible endpoint used by existing scripts and test tokens.
+    app.post("/dev/token", name="dev_token", include_in_schema=False)(password_token)
+
     @app.get("/")
     def root() -> dict[str, object]:
         return {
             "service": "mini-cloud-identity",
             "issuer": cfg.issuer,
             "jwks": "/.well-known/jwks.json",
-            "login": "/login" if google is not None else None,
-            "dev_login": "/dev/token" if dev_login else None,
+            "login_methods": {
+                "password": "/login/password" if dev_login else None,
+                "google": "/login" if google is not None else None,
+            },
+            "dev_login_compat": "/dev/token" if dev_login else None,
         }
 
     return app

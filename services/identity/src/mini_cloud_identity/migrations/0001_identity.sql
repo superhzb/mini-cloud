@@ -3,12 +3,8 @@
 -- auth SDK (packages/auth) is a db-less verifier and owns no schema; these tables belong here. See
 -- docs/identity-plan.md → "Where per-app grants live".
 --
--- This is the WHOLE authentication-adjacent schema: there is no password column and no session /
--- token table. Google is the login authority; access is a short-lived JWT. What we persist is
--- *authorization* (who may enter which app, at what role), not *authentication* state.
---
--- The dev-only `dev_users` table is intentionally NOT here — it is created at boot only when dev
--- login is enabled, so it never ships in a graduated schema (see app.py / devlogin.py).
+-- Password hashes live in a separate account table; there is still no session/token table. Both
+-- username/password and Google OAuth feed the same short-lived platform-JWT mint path.
 
 -- Profile cache, populated from Google's id_token. Convenience only; never a source of authZ.
 CREATE TABLE IF NOT EXISTS users (
@@ -32,3 +28,12 @@ CREATE TABLE IF NOT EXISTS grants (
 
 -- Look up all of one person's grants at mint time.
 CREATE INDEX IF NOT EXISTS grants_email_idx ON grants (email);
+
+-- Basic username/password login. The default admin/admin row is seeded only when password login
+-- is enabled in local development; passwords are salted PBKDF2 hashes, never plaintext.
+CREATE TABLE IF NOT EXISTS dev_users (
+    username      TEXT        PRIMARY KEY,
+    email         TEXT        NOT NULL,
+    password_hash TEXT        NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
