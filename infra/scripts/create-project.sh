@@ -4,7 +4,8 @@
 #
 #   ./scripts/create-project.sh <name> [db_password]
 #
-# Creates: Postgres role <name> + database <name> owned by it, and MinIO bucket <name>.
+# Creates: Postgres role <name> + database <name> owned by it, enables pgvector in that database,
+# and creates a MinIO bucket <name>.
 # Prints the canonical DATABASE_URL / STORAGE_* env for the app.
 set -euo pipefail
 
@@ -50,6 +51,13 @@ END \$\$;
 SELECT 'CREATE DATABASE "${NAME}" OWNER "${NAME}"'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${NAME}')\gexec
 SQL
+
+# Extensions are database-local. Run this on every invocation so an existing project database also
+# gains pgvector after the infra image is upgraded; IF NOT EXISTS keeps provisioning idempotent.
+echo "==> Postgres: enabling pgvector in '$NAME'"
+PGPASSWORD="$ADMIN_PW" psql -v ON_ERROR_STOP=1 \
+  -h "$CONNECT_HOST" -p 15432 -U "${POSTGRES_USER:-postgres}" -d "$NAME" \
+  -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 
 # --- MinIO: bucket ---------------------------------------------------------------------
 # Isolated config dir + unique alias so we never touch the user's ~/.mc or race a concurrent run.

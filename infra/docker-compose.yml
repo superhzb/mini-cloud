@@ -15,7 +15,9 @@ name: mini-cloud-infra
 
 services:
   postgres:
-    image: postgres:16.4-alpine
+    # PostgreSQL 16 with the pgvector extension files installed. create-project.sh enables the
+    # extension in each app database (including databases created before this image switch).
+    image: pgvector/pgvector:0.8.5-pg16-bookworm
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}

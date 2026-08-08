@@ -1,7 +1,8 @@
 # infra — the mini-cloud infra stack
 
-Postgres, MinIO, Loki, Prometheus, Grafana in one docker-compose file. Data lives in Docker **named
-volumes** (never in the repo). The *same file* runs on the Mac mini and on a Linux VPS.
+Postgres with pgvector, MinIO, Loki, Prometheus, Grafana in one docker-compose file. Data lives in
+Docker **named volumes** (never in the repo). The *same file* runs on the Mac mini and on a Linux
+VPS.
 
 ## Prerequisite
 
@@ -55,10 +56,13 @@ inspecting data changes and deciding whether a field is worth keeping.
 
 ```bash
 make project NAME=demo-x
-# → creates Postgres role+db 'demo-x' and MinIO bucket 'demo-x', prints canonical env
+# → creates Postgres role+db 'demo-x', enables pgvector, and creates its MinIO bucket
 ```
 
 (The scaffolder automates this in Phase 4; this is the manual path.)
+
+`vector` is enabled per database. Re-run `make project NAME=<existing-project>` after upgrading the
+stack to enable it in an already-provisioned project database; this preserves all existing data.
 
 `create-project.sh` provisions **over the network** — `psql` against `:15432` and `mc` against
 `:19000` — the way you'd talk to a managed Postgres/S3, rather than shelling into the containers.
@@ -118,5 +122,6 @@ the exact block, including the console `links`):
 
 ## Pinned images
 
-Postgres 16.4 · MinIO 2024-09-13 · Loki 3.1.1 · Prometheus 2.54.1 · Grafana 11.2.0. Bump one at a
-time — a version pin per service keeps a Postgres bump from touching MinIO (decoupling model).
+PostgreSQL 16 / pgvector 0.8.5 · MinIO 2024-09-13 · Loki 3.1.1 · Prometheus 2.54.1 · Grafana
+11.2.0. Bump one at a time — a version pin per service keeps a Postgres bump from touching MinIO
+(decoupling model).
